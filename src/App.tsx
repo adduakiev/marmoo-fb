@@ -26,12 +26,24 @@ export default function App() {
     try {
       // Перетворюємо масиви мультивибору у зручні рядки через кому для Google Таблиці
       const payload = {
-        ...data,
-        q3: data.q3.join(', '),
-        q7: data.q7.join(', '),
-        q11: data.q11.join(', '),
-        q13: data.q13.join(', '),
-      };
+  q1: data.q1,
+  q2: data.q2,
+  q3: Array.isArray(data.q3) ? data.q3.join(', ') : data.q3,
+  q4: data.q4,
+  q5: data.q5,
+  q6: data.q6,
+  q7: Array.isArray(data.q7) ? data.q7.join(', ') : data.q7,
+  q8: data.q8,
+  q9: data.q9,
+  q10: data.q10,
+  q11: Array.isArray(data.q11) ? data.q11.join(', ') : data.q11,
+  q12: data.q12,
+  q13: Array.isArray(data.q13) ? data.q13.join(', ') : data.q13,
+  q14: data.q14,
+  q15: data.q15,
+  q16: data.q16,
+  q17: data.q17,
+};
 
       if (SCRIPT_URL) {
         // Надсилаємо реальний POST-запит на Google Apps Script
