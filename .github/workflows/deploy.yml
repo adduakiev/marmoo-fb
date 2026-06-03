@@ -33,19 +33,21 @@ jobs:
 
       - name: Build Project
         run: |
-          # Переходимо безпосередньо у фіксовану папку проєкту
-          cd adduakiev-marmoo-fb-ae4f83fa0cd2b1898fa2502d307a3252d112f271
+          # Автоматично шукаємо папку, де лежить package.json (ігноруючи node_modules)
+          APP_DIR=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
+          cd "$APP_DIR"
           
-          echo "Запуск збірки в папці додатка..."
+          echo "Успішно зайшли в папку проєкту: $APP_DIR"
           
-          # Надійне встановлення залежностей
+          # Встановлюємо залежності
           npm install --legacy-peer-deps
           
-          # Запуск збірки з передачею секрету
+          # Запуск збірки Vite
           VITE_API_URL="${{ secrets.VITE_API_URL }}" npm run build
           
-          # Копіюємо результат у корінь репозиторію
-          cp -r dist ../dist_root
+          # Переносимо результат у корінь, звідки GitHub Pages забирає артефакти
+          mkdir -p ../dist_root
+          cp -r dist/* ../dist_root/ || cp -r dist ../dist_root
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
