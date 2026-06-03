@@ -31,23 +31,13 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
       - name: Build Project
-        run: |
-          # Автоматично шукаємо папку, де лежить package.json (ігноруючи node_modules)
-          APP_DIR=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
-          cd "$APP_DIR"
-          
-          echo "Успішно зайшли в папку проєкту: $APP_DIR"
-          
-          # Встановлюємо залежності
-          npm install --legacy-peer-deps
-          
-          # Запуск збірки Vite
-          VITE_API_URL="${{ secrets.VITE_API_URL }}" npm run build
-          
-          # Переносимо результат у корінь, звідки GitHub Pages забирає артефакти
-          mkdir -p ../dist_root
-          cp -r dist/* ../dist_root/ || cp -r dist ../dist_root
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -55,7 +45,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist_root'
+          path: './dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
