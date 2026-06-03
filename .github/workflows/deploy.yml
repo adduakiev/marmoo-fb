@@ -27,15 +27,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+      - name: Locate project directory and build
+        run: |
+          # Автоматично знаходимо, де лежить package.json (в корені чи в підпапці)
+          SUBDIR=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
+          cd "$SUBDIR"
+          
+          echo "Робоча директорія проєкту: $SUBDIR"
+          
+          # Встановлюємо залежності (створюючи lock-file автоматично)
+          npm install
+          
+          # Запускаємо збірку з передачею секретного токена
+          VITE_API_URL="${{ secrets.VITE_API_URL }}" npm run build
+          
+          # Переміщуємо результат збірки в корінь для завантаження артефакту
+          cp -r dist ../../dist_root 2>/dev/null || cp -r dist ../dist_root
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -43,7 +51,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './dist_root'
 
       - name: Deploy to GitHub Pages
         id: deployment
