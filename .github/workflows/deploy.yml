@@ -28,26 +28,22 @@ jobs:
         with:
           node-version: 22
 
-      - name: Locate project directory and build
+      - name: Build Project
         run: |
-          # Знаходимо папку з package.json
-          SUBDIR=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
-          cd "$SUBDIR"
+          # Знаходимо папку, де лежить package.json
+          TARGET_DIR=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
+          cd "$TARGET_DIR"
           
-          echo "Робоча директорія проєкту: $SUBDIR"
+          echo "Збірка проєкту в директорії: $TARGET_DIR"
           
-          # Очищення кешу та встановлення
+          # Встановлюємо чисті залежності
           npm install
           
-          # Модифікуємо скрипт збірки, щоб ігнорувати суворі помилки TypeScript (якщо вони є)
-          # Замінюємо "tsc && vite build" на просто "vite build"
-          npx npm-json-sets script.build "vite build" 2>/dev/null || sed -i 's/"build": "tsc && vite build"/"build": "vite build"/' package.json
-          
-          # Запускаємо збірку
+          # Компілюємо проєкт за допомогою Vite
           VITE_API_URL="${{ secrets.VITE_API_URL }}" npm run build
           
-          # Переміщуємо результат в корінь
-          cp -r dist ../../dist_root 2>/dev/null || cp -r dist ../dist_root
+          # Переносимо готову папку dist так, щоб робот деплою її точно побачив
+          mv dist ../../dist_root 2>/dev/null || cp -r dist ../dist_root || true
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
