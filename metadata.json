@@ -1,0 +1,6 @@
+{
+  "name": "Marmoo Feedback Form",
+  "description": "A responsive, tablet-friendly step-by-step feedback form for Marmoo restaurant's soft opening.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
