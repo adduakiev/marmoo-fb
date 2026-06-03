@@ -13,6 +13,9 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     environment:
@@ -26,24 +29,23 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Build Project
         run: |
-          # Знаходимо папку, де лежить package.json
-          TARGET_DIR=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
-          cd "$TARGET_DIR"
+          # Переходимо безпосередньо у фіксовану папку проєкту
+          cd adduakiev-marmoo-fb-ae4f83fa0cd2b1898fa2502d307a3252d112f271
           
-          echo "Збірка проєкту в директорії: $TARGET_DIR"
+          echo "Запуск збірки в папці додатка..."
           
-          # Встановлюємо чисті залежності
-          npm install
+          # Надійне встановлення залежностей
+          npm install --legacy-peer-deps
           
-          # Компілюємо проєкт за допомогою Vite
+          # Запуск збірки з передачею секрету
           VITE_API_URL="${{ secrets.VITE_API_URL }}" npm run build
           
-          # Переносимо готову папку dist так, щоб робот деплою її точно побачив
-          mv dist ../../dist_root 2>/dev/null || cp -r dist ../dist_root || true
+          # Копіюємо результат у корінь репозиторію
+          cp -r dist ../dist_root
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
