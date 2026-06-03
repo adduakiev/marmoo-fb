@@ -4,8 +4,9 @@ import { defaultFeedbackData, FeedbackData } from './types';
 import { Button, Pill, StarRating, ScaleRating, TextInput, QuestionLabel } from './components/ui';
 import { Loader2 } from 'lucide-react';
 
-const SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE";
-const TOTAL_STEPS = 8; // Step 9 is Thank you
+// Зчитуємо URL-адресу з файлу .env (підставляється автоматично під час збірки Vite)
+const SCRIPT_URL = import.meta.env.VITE_API_URL || "";
+const TOTAL_STEPS = 8; // Крок 9 — це екран подяки "Thank you"
 
 export default function App() {
   const [step, setStep] = useState(1);
@@ -23,7 +24,7 @@ export default function App() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Process multi-choice into comma-separated strings
+      // Перетворюємо масиви мультивибору у зручні рядки через кому для Google Таблиці
       const payload = {
         ...data,
         q3: data.q3.join(', '),
@@ -32,21 +33,22 @@ export default function App() {
         q13: data.q13.join(', '),
       };
 
-      if (SCRIPT_URL !== "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE") {
+      if (SCRIPT_URL) {
+        // Надсилаємо реальний POST-запит на Google Apps Script
         await fetch(SCRIPT_URL, {
           method: 'POST',
           body: JSON.stringify(payload),
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' } // text/plain avoids CORS preflight
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' } // text/plain допомагає уникнути CORS обмежень
         });
       } else {
-        // Simulate network if no URL
+        // Симуляція мережі, якщо файл .env ще не налаштовано або порожній
         await new Promise(r => setTimeout(r, 1500));
-        console.log("Form Submitted:", payload);
+        console.log("Форму надіслано (Режим симуляції):", payload);
       }
       setStep(9);
     } catch (error) {
       console.error("Submission failed", error);
-      alert("Виникла помилка. Будь ласка, спробуйте ще раз.");
+      alert("Виникла помилка під час відправки. Будь ласка, спробуйте ще раз.");
     } finally {
       setIsSubmitting(false);
     }
@@ -215,7 +217,7 @@ export default function App() {
                 {step === 6 && (
                   <div className="space-y-10">
                     <div>
-                      <QuestionLabel required>Наскільки вам було зручно перебувати в закладі?</QuestionLabel>
+                      <QuestionLabel required>Наскільки вам было зручно перебувати в закладі?</QuestionLabel>
                       <StarRating value={data.q12} onChange={(v) => updateData('q12', v)} />
                     </div>
                     <div>
@@ -278,7 +280,7 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        {/* Floating Bottom Bar (Desktop & Mobile) */}
+        {/* Floating Bottom Bar */}
         {step < 9 && (
           <div className="absolute bottom-0 w-full left-0 right-0 bg-card-bg/90 backdrop-blur-md border-t border-border-line p-5 md:px-12 flex justify-between gap-4 items-center">
             <div className="flex-1">
@@ -310,4 +312,3 @@ export default function App() {
     </div>
   );
 }
-
