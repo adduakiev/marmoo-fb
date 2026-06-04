@@ -69,7 +69,7 @@ export default function App() {
     } catch (error) {
       console.error("Submission failed", error);
       alert("Виникла помилка під час відправки. Будь ласка, спробуйте ще раз.");
-    } final {
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -145,7 +145,7 @@ export default function App() {
                         Привіт від команди Marmoo! 🥂
                       </h1>
                       <p className="text-lg md:text-xl text-muted leading-relaxed max-w-lg mx-auto">
-                        Дякуємо, що завітали на наше технічне відкриття. Ми ще налаштовуємо процеси, тому ваша чесна думка допоможе нам стать ідеальними. Опитування займе всього 2 хвилини!
+                        Дякуємо, що завітали на наше технічне відкриття. Ми ще налаштовуємо процеси, тому ваша чесна думка допоможе нам стати ідеальними. Опитування займе всього 2 хвилини!
                       </p>
                     </div>
                   </div>
