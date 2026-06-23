@@ -140,6 +140,7 @@ export default function App() {
       case 6: return menuRating !== null && (menuRating >= 7 || menuComment.trim() !== '');
       case 7: return data.q12 !== null;
       case 8: return data.q14.trim() !== '' && data.q15 !== null && data.q16 !== null && priceRating !== null;
+      case 9: return true; // Питання опційне, завжди валідне для активації кнопки відправки
       default: return true;
     }
   };
@@ -151,8 +152,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 font-['Montserrat',sans-serif]">
-      {/* Преміальна картка з легким ефектом розмиття фону поверх нашої підложки */}
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 font-sans">
       <div className="w-full max-w-[680px] bg-white/95 backdrop-blur-md rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] overflow-hidden relative min-h-[660px] flex flex-col border border-white/40 z-20">
         
         {/* Progress Bar */}
@@ -184,11 +184,11 @@ export default function App() {
               <div className="px-6 md:px-12 py-6 space-y-8">
                 {step === 1 && (
                   <div className="text-center space-y-6 py-16">
-                    <h1 className="text-4xl md:text-5xl font-['Playfair_Display',serif] text-[#1A1A1A] mb-6 font-medium tracking-wide">
+                    <h1 className="text-4xl md:text-5xl font-bold text-[#1A1A1A] mb-6 tracking-wide uppercase">
                       Привіт від команди Marmoo! 🥂
                     </h1>
                     <p className="text-lg text-[#62616D] leading-relaxed max-w-lg mx-auto font-light">
-                      Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стать ідеальними.
+                      Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стати ідеальними.
                     </p>
                   </div>
                 )}
@@ -365,7 +365,7 @@ export default function App() {
                      <div className="w-20 h-20 bg-[#F4F4F6] text-[#1A1A1A] rounded-full flex items-center justify-center mb-2">
                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                      </div>
-                    <h1 className="text-3xl md:text-4xl font-['Playfair_Display',serif] text-[#1A1A1A] mb-2 font-medium tracking-wide">Дякуємо! ❤️</h1>
+                    <h1 className="text-3xl md:text-4xl font-bold text-[#1A1A1A] mb-2 tracking-wide uppercase">Дякуємо! ❤️</h1>
                     <p className="text-lg text-[#62616D] max-w-md mx-auto mb-6 font-light">
                       Ваш фідбек вже летить до шеф-кухаря та менеджерів закладу!
                     </p>
