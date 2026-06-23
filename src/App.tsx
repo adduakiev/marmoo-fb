@@ -4,7 +4,7 @@ import { defaultFeedbackData, FeedbackData } from './types';
 import { Button, Pill, StarRating, ScaleRating, TextInput, QuestionLabel } from './components/ui';
 import { Loader2 } from 'lucide-react';
 
-// Зчитуємо URL-адресу з файлу .env (підставляється автоматично під час збірки Vite)
+// Зчитуємо URL-адресу з файлу .env
 const SCRIPT_URL = import.meta.env.VITE_API_URL || "";
 const TOTAL_STEPS = 8; // Крок 9 — це екран подяки "Thank you"
 
@@ -13,8 +13,11 @@ export default function App() {
   const [data, setData] = useState<FeedbackData>(defaultFeedbackData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Додатковий локальний стан для текстового уточнення дискомфорту (Скріншот 2)
-  const [q13Text, setQ13Text] = useState('');
+  // Нові локальні стани для розширених текстових полів та оцінки цін
+  const [q3Text, setQ3Text] = useState(''); // Свій варіант атмосфери (Скріншот 1)
+  const [q11Text, setQ11Text] = useState(''); // Яка страва/напій і чому (Скріншот 2)
+  const [q13Text, setQ13Text] = useState(''); // Додатково про дискомфорт
+  const [priceRating, setPriceRating] = useState<string | null>(null); // Оцінка цін (Скріншот 4)
 
   const handleNext = () => {
     if (step < 9) setStep(step + 1);
@@ -27,17 +30,28 @@ export default function App() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Об'єднуємо вибрані пігулки дискомфорту та вільний текст в один рядок для Google Таблиці
+      // 1. Збираємо атмосферу (чекбокси + свій варіант)
+      const finalQ3 = [...data.q3];
+      if (q3Text.trim()) finalQ3.push(`Свій варіант: ${q3Text.trim()}`);
+
+      // 2. Збираємо зауваження по їжі (чекбокси + деталі по стравах)
+      const finalQ11 = [...data.q11];
+      if (q11Text.trim()) finalQ11.push(`Що доопрацювати: ${q11Text.trim()}`);
+
+      // 3. Збираємо дискомфорт зал
       const finalQ13 = [...data.q13];
-      if (q13Text.trim()) {
-        finalQ13.push(`Коментар: ${q13Text.trim()}`);
+      if (q13Text.trim()) finalQ13.push(`Коментар: ${q13Text.trim()}`);
+
+      // 4. Формуємо блок про коментарі разом із оцінкою цін, щоб зберегти структуру колонок
+      let finalQ17 = data.q17 || '';
+      if (priceRating) {
+        finalQ17 = `[Оцінка ціна/якість: ${priceRating}] ${finalQ17}`.trim();
       }
 
-      // Перетворюємо масиви мультивибору у зручні рядки через кому для стовпців Google Таблиці
       const payload = {
         q1: data.q1,
         q2: data.q2,
-        q3: Array.isArray(data.q3) ? data.q3.join(', ') : data.q3,
+        q3: finalQ3.join(', '),
         q4: data.q4,
         q5: data.q5,
         q6: data.q6,
@@ -45,17 +59,16 @@ export default function App() {
         q8: data.q8,
         q9: data.q9,
         q10: data.q10,
-        q11: Array.isArray(data.q11) ? data.q11.join(', ') : data.q11,
+        q11: finalQ11.join(', '),
         q12: data.q12,
-        q13: finalQ13.join(', '), // Надійно склеюємо чекбокси + твій новий текст з поля
+        q13: finalQ13.join(', '),
         q14: data.q14,
         q15: data.q15,
         q16: data.q16,
-        q17: data.q17,
+        q17: finalQ17,
       };
 
       if (SCRIPT_URL) {
-        // Надсилаємо реальний POST-запит на Google Apps Script
         await fetch(SCRIPT_URL, {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -68,7 +81,7 @@ export default function App() {
       setStep(9);
     } catch (error) {
       console.error("Submission failed", error);
-      alert("Виникла помилка під час відправки. Будь ласка, спробуйте ще раз.");
+      alert("Виникла помилка під час відправки. Спробуйте ще раз.");
     } finally {
       setIsSubmitting(false);
     }
@@ -95,7 +108,7 @@ export default function App() {
       case 4: return data.q5 !== null && data.q6 !== null;
       case 5: return data.q8 !== null && data.q9 !== null;
       case 6: return data.q12 !== null;
-      case 7: return data.q14.trim() !== '' && data.q15 !== null && data.q16 !== null;
+      case 7: return data.q14.trim() !== '' && data.q15 !== null && data.q16 !== null && priceRating !== null;
       default: return true;
     }
   };
@@ -171,10 +184,15 @@ export default function App() {
                     </div>
                     <div>
                       <QuestionLabel>Що саме вам сподобалось в атмосфері? (Можна декілька)</QuestionLabel>
-                      <div className="flex flex-wrap gap-2.5">
+                      <div className="flex flex-wrap gap-2.5 mb-4">
                         {['Музика та її гучність', 'Освітлення', "Інтер'єр та декор", 'Чистота', 'Комфортна температура', 'Усе сподобалось'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q3.includes(opt)} onClick={() => toggleMulti('q3', opt)} />
                         ))}
+                      </div>
+                      {/* Скріншот 1: Додано інпут для свого варіанту атмосфери */}
+                      <div className="pt-2">
+                        <QuestionLabel>Свій варіант або коментар до атмосфери:</QuestionLabel>
+                        <TextInput value={q3Text} onChange={(v) => setQ3Text(v)} placeholder="Що саме вас вразило або заважало..." />
                       </div>
                     </div>
                     <div>
@@ -191,7 +209,6 @@ export default function App() {
                       <StarRating value={data.q5} onChange={(v) => updateData('q5', v)} />
                     </div>
                     <div>
-                      {/* Скріншот 4: Додано третій середній варіант */}
                       <QuestionLabel required>Чи було вам комфортно взаємодіяти з персоналом?</QuestionLabel>
                       <div className="flex flex-col gap-3">
                         {[
@@ -226,15 +243,19 @@ export default function App() {
                     </div>
                     <div>
                       <QuestionLabel>Яка страва/напій сподобались найбільше?</QuestionLabel>
-                      <TextInput value={data.q10} onChange={(v) => updateData('q10', v)} placeholder="Назва страви..." />
+                      <TextInput value={data.q10} onChange={(v) => updateData('q10', v)} placeholder="Назва страви чи напою..." />
                     </div>
                     <div>
-                      {/* Скріншот 3: Додано варіант "Усе було смачно" */}
                       <QuestionLabel>Що сподобалось найменше або потребує доопрацювання?</QuestionLabel>
-                      <div className="flex flex-wrap gap-2.5">
+                      <div className="flex flex-wrap gap-2.5 mb-4">
                         {['Температура страви', 'Баланс смаку', 'Розмір порції', 'Усе було смачно'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q11.includes(opt)} onClick={() => toggleMulti('q11', opt)} />
                         ))}
+                      </div>
+                      {/* Скріншот 2: Деталізація зауважень щодо меню */}
+                      <div className="pt-2">
+                        <QuestionLabel>Яка страва чи напій потребує доопрацювання і чому? (Опційно):</QuestionLabel>
+                        <TextInput value={q11Text} onChange={(v) => setQ11Text(v)} placeholder="Наприклад: Салат занадто солоний, кава захолодна..." />
                       </div>
                     </div>
                   </div>
@@ -243,7 +264,6 @@ export default function App() {
                 {step === 6 && (
                   <div className="space-y-10">
                     <div>
-                      {/* Скріншот 1: Виправлено текстову помилку "было" -> "було" */}
                       <QuestionLabel required>Наскільки вам було зручно перебувати в закладі?</QuestionLabel>
                       <StarRating value={data.q12} onChange={(v) => updateData('q12', v)} />
                     </div>
@@ -254,7 +274,6 @@ export default function App() {
                           <Pill key={opt} label={opt} selected={data.q13.includes(opt)} onClick={() => toggleMulti('q13', opt)} />
                         ))}
                       </div>
-                      {/* Скріншот 2: Додано нове текстове поле для вільного опису дискомфорту */}
                       <div className="pt-2">
                         <QuestionLabel>Може ще щось було незручно? Напишіть коротко:</QuestionLabel>
                         <TextInput value={q13Text} onChange={(v) => setQ13Text(v)} placeholder="Ваш варіант або уточнення..." />
@@ -270,13 +289,33 @@ export default function App() {
                       <TextInput value={data.q14} onChange={(v) => updateData('q14', v)} placeholder="Ваша відповідь..." />
                     </div>
                     <div>
+                      {/* Скріншот 3: Оновлені м'які варіанти повернення */}
                       <QuestionLabel required>Чи повернулися б ви до Marmoo знову?</QuestionLabel>
-                      <div className="flex flex-wrap gap-2.5">
-                        {["Так, обов'язково", 'Скоріше так', 'Ні'].map(opt => (
+                      <div className="flex flex-col gap-3">
+                        {[
+                          "Обов'язково", 
+                          'Скоріш за все так', 
+                          'Є сумніви / Поки ні'
+                        ].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q15 === opt} onClick={() => updateData('q15', opt)} />
                         ))}
                       </div>
                     </div>
+                    
+                    {/* Скріншот 4: Новий інтегрований блок про ціни */}
+                    <div>
+                      <QuestionLabel required>Як ви оцінюєте співвідношення ціни та якості у Marmoo?</QuestionLabel>
+                      <div className="flex flex-col gap-3">
+                        {[
+                          'Дорого для такої якості',
+                          'Ціна повністю виправдана',
+                          'Дуже вигідно / Очікували, що буде дорожче'
+                        ].map(opt => (
+                          <Pill key={opt} label={opt} selected={priceRating === opt} onClick={() => setPriceRating(opt)} />
+                        ))}
+                      </div>
+                    </div>
+
                     <div>
                       <QuestionLabel required>Чи порекомендуєте ви Marmoo друзям?</QuestionLabel>
                       <ScaleRating 
