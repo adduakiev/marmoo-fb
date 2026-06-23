@@ -151,8 +151,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F9FB] text-[#1A1A1A] flex flex-col items-center justify-center p-4 md:p-8 font-['Montserrat',sans-serif]">
-      <div className="w-full max-w-[680px] bg-white rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.03)] overflow-hidden relative min-h-[660px] flex flex-col border border-[#EEEDF2]">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 font-['Montserrat',sans-serif]">
+      {/* Преміальна картка з легким ефектом розмиття фону поверх нашої підложки */}
+      <div className="w-full max-w-[680px] bg-white/95 backdrop-blur-md rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] overflow-hidden relative min-h-[660px] flex flex-col border border-white/40 z-20">
         
         {/* Progress Bar */}
         {step > 1 && step < 10 && (
@@ -187,7 +188,7 @@ export default function App() {
                       Привіт від команди Marmoo! 🥂
                     </h1>
                     <p className="text-lg text-[#62616D] leading-relaxed max-w-lg mx-auto font-light">
-                      Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стати ідеальними.
+                      Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стать ідеальними.
                     </p>
                   </div>
                 )}
@@ -201,7 +202,7 @@ export default function App() {
 
                 {step === 3 && (
                   <div className="space-y-8">
-                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-3">
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-3">
                       <QuestionLabel required>Як вам атмосфера закладу?</QuestionLabel>
                       <StarRating value={data.q2} onChange={(v) => updateData('q2', v)} />
                     </div>
@@ -223,7 +224,7 @@ export default function App() {
 
                 {step === 4 && (
                   <div className="space-y-8">
-                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-3">
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-3">
                       <QuestionLabel required>Як ви оцінюєте роботу команди (сервіс)?</QuestionLabel>
                       <StarRating value={data.q5} onChange={(v) => updateData('q5', v)} />
                     </div>
@@ -247,20 +248,19 @@ export default function App() {
                   </div>
                 )}
 
-                {/* КРОК 5: КУХНЯ ТА СТРАВА — КАРД-ДИЗАЙН З ВЕРТИКАЛЬНИМ UX РОЗПОДІЛОМ */}
                 {step === 5 && (
                   <div className="space-y-6">
-                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
                       <QuestionLabel required>Як ви оцінюєте смак страв?</QuestionLabel>
                       <StarRating value={data.q8} onChange={(v) => updateData('q8', v)} />
                     </div>
 
-                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
                       <QuestionLabel required>Як ви оцінюєте подачу та вигляд страв?</QuestionLabel>
                       <StarRating value={data.q9} onChange={(v) => updateData('q9', v)} />
                     </div>
 
-                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-5">
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-5">
                       <div className="space-y-2">
                         <QuestionLabel required>Яку страву ви куштували сьогодні (першу)?</QuestionLabel>
                         <TextInput value={data.q10} onChange={(v) => updateData('q10', v)} placeholder="Назва страви..." />
@@ -283,10 +283,9 @@ export default function App() {
                   </div>
                 )}
 
-                {/* КРОК 6: АСОРТИМЕНТ МЕНЮ */}
                 {step === 6 && (
                   <div className="space-y-6">
-                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-5">
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-5">
                       <div className="space-y-2">
                         <QuestionLabel required>Наскільки ви задоволені меню загалом (асортимент)?</QuestionLabel>
                         <ScaleRating 
@@ -309,7 +308,7 @@ export default function App() {
 
                 {step === 7 && (
                   <div className="space-y-6">
-                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
                       <QuestionLabel required>Наскільки зручно було перебувати в закладі?</QuestionLabel>
                       <StarRating value={data.q12} onChange={(v) => updateData('q12', v)} />
                     </div>
@@ -334,7 +333,7 @@ export default function App() {
                     <div className="space-y-3">
                       <QuestionLabel required>Чи повернулися б ви до Marmoo знову?</QuestionLabel>
                       <div className="flex flex-col gap-2.5">
-                        {["Обов'язково", 'Skorish za все так', 'Є сумніви / Поки ні'].map(opt => (
+                        {["Обов'язково", 'Скоріш за все так', 'Є сумніви / Поки ні'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q15 === opt} onClick={() => updateData('q15', opt)} />
                         ))}
                       </div>
