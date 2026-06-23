@@ -5,7 +5,7 @@ import { Button, Pill, StarRating, ScaleRating, TextInput, QuestionLabel } from 
 import { Loader2, RefreshCw } from 'lucide-react';
 
 const SCRIPT_URL = import.meta.env.VITE_API_URL || "";
-const TOTAL_STEPS = 9; // Збільшили до 9 через розділення блоку їжі
+const TOTAL_STEPS = 9; 
 
 export default function App() {
   const [step, setStep] = useState(1);
@@ -107,10 +107,8 @@ export default function App() {
           body: JSON.stringify(payload),
           headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         });
-      } else {
-        await new Promise(r => setTimeout(r, 1500));
       }
-      setStep(10); // Екран подяки тепер 10-й
+      setStep(10);
     } catch (error) {
       console.error("Submission failed", error);
       alert("Виникла помилка під час відправки.");
@@ -153,18 +151,18 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-bg-app text-ink flex flex-col items-center justify-center p-4 md:p-8 font-sans">
-      <div className="w-full max-w-[680px] bg-card-bg rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.05)] overflow-hidden relative min-h-[660px] flex flex-col">
+    <div className="min-h-screen bg-[#F9F9FB] text-[#1A1A1A] flex flex-col items-center justify-center p-4 md:p-8 font-['Montserrat',sans-serif]">
+      <div className="w-full max-w-[680px] bg-white rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.03)] overflow-hidden relative min-h-[660px] flex flex-col border border-[#EEEDF2]">
         
         {/* Progress Bar */}
         {step > 1 && step < 10 && (
           <div className="px-6 md:px-12 pt-10 pb-2">
-            <div className="flex justify-between items-center text-[13px] uppercase tracking-[0.1em] text-muted mb-3 font-medium">
+            <div className="flex justify-between items-center text-[11px] uppercase tracking-[0.2em] text-[#8A8994] mb-3 font-semibold">
               <span>Крок {step - 1} з {TOTAL_STEPS}</span>
             </div>
-            <div className="w-full bg-border-line rounded-full h-[6px]">
+            <div className="w-full bg-[#EEEDF2] rounded-full h-[4px]">
               <div 
-                className="bg-brand h-full rounded-full transition-all duration-500 ease-out" 
+                className="bg-[#1A1A1A] h-full rounded-full transition-all duration-500 ease-out" 
                 style={{ width: `${((step - 1) / TOTAL_STEPS) * 100}%` }}
               />
             </div>
@@ -182,41 +180,41 @@ export default function App() {
               transition={{ duration: 0.3 }}
               className="flex flex-col flex-1 pb-24"
             >
-              <div className="px-6 md:px-12 py-6 space-y-6">
+              <div className="px-6 md:px-12 py-6 space-y-8">
                 {step === 1 && (
-                  <div className="text-center space-y-6 py-12">
-                    <h1 className="text-4xl md:text-5xl font-serif text-ink mb-6 font-medium">
+                  <div className="text-center space-y-6 py-16">
+                    <h1 className="text-4xl md:text-5xl font-['Playfair_Display',serif] text-[#1A1A1A] mb-6 font-medium tracking-wide">
                       Привіт від команди Marmoo! 🥂
                     </h1>
-                    <p className="text-lg md:text-xl text-muted leading-relaxed max-w-lg mx-auto">
+                    <p className="text-lg text-[#62616D] leading-relaxed max-w-lg mx-auto font-light">
                       Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стати ідеальними.
                     </p>
                   </div>
                 )}
 
                 {step === 2 && (
-                  <div>
+                  <div className="space-y-4">
                     <QuestionLabel required>Як ви оцінюєте ваш загальний досвід сьогодні?</QuestionLabel>
                     <ScaleRating value={data.q1} onChange={(v) => updateData('q1', v)} minLabel="Жахливо" maxLabel="Ідеально" />
                   </div>
                 )}
 
                 {step === 3 && (
-                  <div className="space-y-6">
-                    <div>
+                  <div className="space-y-8">
+                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-3">
                       <QuestionLabel required>Як вам атмосфера закладу?</QuestionLabel>
                       <StarRating value={data.q2} onChange={(v) => updateData('q2', v)} />
                     </div>
-                    <div>
+                    <div className="space-y-4">
                       <QuestionLabel>Що саме вам сподобалось в атмосфері?</QuestionLabel>
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="flex flex-wrap gap-2 mb-2">
                         {['Музика та її гучність', 'Освітлення', "Інтер'єр та декор", 'Чистота', 'Комфортна температура', 'Усе сподобалось'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q3.includes(opt)} onClick={() => toggleMulti('q3', opt)} />
                         ))}
                       </div>
                       <TextInput value={q3Text} onChange={(v) => setQ3Text(v)} placeholder="Свій варіант чи коментар..." />
                     </div>
-                    <div>
+                    <div className="space-y-3">
                       <QuestionLabel>Що ми можемо покращити в залі? (Опційно)</QuestionLabel>
                       <TextInput value={data.q4} onChange={(v) => updateData('q4', v)} placeholder="Наприклад: було трохи прохолодно..." />
                     </div>
@@ -224,21 +222,21 @@ export default function App() {
                 )}
 
                 {step === 4 && (
-                  <div className="space-y-6">
-                    <div>
+                  <div className="space-y-8">
+                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-3">
                       <QuestionLabel required>Як ви оцінюєте роботу команди (сервіс)?</QuestionLabel>
                       <StarRating value={data.q5} onChange={(v) => updateData('q5', v)} />
                     </div>
-                    <div>
+                    <div className="space-y-4">
                       <QuestionLabel required>Чи було вам комфортно взаємодіяти з персоналом?</QuestionLabel>
-                      <div className="flex flex-col gap-2.5 mb-3">
+                      <div className="flex flex-col gap-2.5">
                         {['Так, усі були привітні', 'Загалом все ок, але були непорозуміння', 'Ні, виникли труднощі'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q6 === opt} onClick={() => updateData('q6', opt)} />
                         ))}
                       </div>
                       <TextInput value={q6Text} onChange={(v) => setQ6Text(v)} placeholder="Або напишіть свій варіант..." />
                     </div>
-                    <div>
+                    <div className="space-y-3">
                       <QuestionLabel>Що варто покращити в обслуговуванні?</QuestionLabel>
                       <div className="flex flex-wrap gap-2">
                         {['Швидкість винесення страв', 'Уважність офіціанта', 'Знання меню', 'Швидкість розрахунку', 'Усе було супер'].map(opt => (
@@ -249,48 +247,47 @@ export default function App() {
                   </div>
                 )}
 
-                {/* РОЗДІЛЕНИЙ КРОК 5: Тільки оцінка страви */}
+                {/* КРОК 5: КУХНЯ ТА СТРАВА — КАРД-ДИЗАЙН З ВЕРТИКАЛЬНИМ UX РОЗПОДІЛОМ */}
                 {step === 5 && (
                   <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <QuestionLabel required>Смак страв та напоїв?</QuestionLabel>
-                        <StarRating value={data.q8} onChange={(v) => updateData('q8', v)} />
-                      </div>
-                      <div>
-                        <QuestionLabel required>Подача та вигляд страв?</QuestionLabel>
-                        <StarRating value={data.q9} onChange={(v) => updateData('q9', v)} />
-                      </div>
+                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
+                      <QuestionLabel required>Як ви оцінюєте смак страв?</QuestionLabel>
+                      <StarRating value={data.q8} onChange={(v) => updateData('q8', v)} />
                     </div>
 
-                    <div className="bg-bg-app/40 p-5 rounded-2xl border border-border-line space-y-4 mt-2">
-                      <div>
-                        <QuestionLabel required>Яку страву або напій ви куштували сьогодні?</QuestionLabel>
-                        <TextInput value={data.q10} onChange={(v) => updateData('q10', v)} placeholder="Назва страви або напою..." />
+                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
+                      <QuestionLabel required>Як ви оцінюєте подачу та вигляд страв?</QuestionLabel>
+                      <StarRating value={data.q9} onChange={(v) => updateData('q9', v)} />
+                    </div>
+
+                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-5">
+                      <div className="space-y-2">
+                        <QuestionLabel required>Яку страву ви куштували сьогодні (першу)?</QuestionLabel>
+                        <TextInput value={data.q10} onChange={(v) => updateData('q10', v)} placeholder="Назва страви..." />
                       </div>
                       
                       {data.q10.trim() !== '' && (
-                        <div>
-                          <QuestionLabel required>Наскільки оціните цю страву за 10-б шкалою?</QuestionLabel>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3 pt-2 border-t border-[#EEEDF2]">
+                          <QuestionLabel required>Наскільки оціните цю страву за 10-бальною шкалою?</QuestionLabel>
                           <ScaleRating value={dishRating} onChange={(v) => setDishRating(v)} start={1} end={10} />
-                        </div>
+                        </motion.div>
                       )}
 
                       {dishRating !== null && dishRating < 7 && (
-                        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-2 pt-2">
                           <QuestionLabel required>Що саме не сподобалось і потребує доопрацювання?</QuestionLabel>
-                          <TextInput value={dishComment} onChange={(v) => setDishComment(v)} placeholder="Опишіть детально зауваження..." />
+                          <TextInput value={dishComment} onChange={(v) => setDishComment(v)} placeholder="Опишіть детально зауваження до страви..." />
                         </motion.div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* НОВИЙ ОКРЕМИЙ КРОК 6: Оцінка асортименту меню */}
+                {/* КРОК 6: АСОРТИМЕНТ МЕНЮ */}
                 {step === 6 && (
-                  <div className="space-y-6 py-4">
-                    <div className="bg-bg-app/40 p-5 rounded-2xl border border-border-line space-y-4">
-                      <div>
+                  <div className="space-y-6">
+                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-5">
+                      <div className="space-y-2">
                         <QuestionLabel required>Наскільки ви задоволені меню загалом (асортимент)?</QuestionLabel>
                         <ScaleRating 
                           value={menuRating} 
@@ -301,7 +298,7 @@ export default function App() {
                       </div>
 
                       {menuRating !== null && menuRating < 7 && (
-                        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-2 pt-2 border-t border-[#EEEDF2]">
                           <QuestionLabel required>Чого саме вам не вистачило в меню? (Ключове питання):</QuestionLabel>
                           <TextInput value={menuComment} onChange={(v) => setMenuComment(v)} placeholder="Яких страв або категорій бракує..." />
                         </motion.div>
@@ -312,13 +309,13 @@ export default function App() {
 
                 {step === 7 && (
                   <div className="space-y-6">
-                    <div>
+                    <div className="bg-[#FDFDFE] p-6 rounded-2xl border border-[#EEEDF2] space-y-4">
                       <QuestionLabel required>Наскільки зручно було перебувати в закладі?</QuestionLabel>
                       <StarRating value={data.q12} onChange={(v) => updateData('q12', v)} />
                     </div>
-                    <div>
+                    <div className="space-y-4">
                       <QuestionLabel>Що саме викликало дискомфорт? (Опційно)</QuestionLabel>
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="flex flex-wrap gap-2 mb-2">
                         {['Незручні стільці', 'Столи надто близько', 'Незручне меню', 'Нюанси у вбиральні', 'Все було зручно'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q13.includes(opt)} onClick={() => toggleMulti('q13', opt)} />
                         ))}
@@ -330,27 +327,27 @@ export default function App() {
 
                 {step === 8 && (
                   <div className="space-y-6">
-                    <div>
+                    <div className="space-y-3">
                       <QuestionLabel required>Назвіть ОДНУ річ, яку нам варто виправити в першу чергу:</QuestionLabel>
                       <TextInput value={data.q14} onChange={(v) => updateData('q14', v)} placeholder="Ваша відповідь..." />
                     </div>
-                    <div>
+                    <div className="space-y-3">
                       <QuestionLabel required>Чи повернулися б ви до Marmoo знову?</QuestionLabel>
                       <div className="flex flex-col gap-2.5">
-                        {["Обов'язково", 'Скоріш за все так', 'Є сумніви / Поки ні'].map(opt => (
+                        {["Обов'язково", 'Skorish za все так', 'Є сумніви / Поки ні'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q15 === opt} onClick={() => updateData('q15', opt)} />
                         ))}
                       </div>
                     </div>
-                    <div>
+                    <div className="space-y-3">
                       <QuestionLabel required>Як ви оцінюєте співвідношення ціни та якості?</QuestionLabel>
                       <div className="flex flex-col gap-2.5">
-                        {['Дорого для такаї якості', 'Ціна повністю виправдана', 'Дуже вигідно'].map(opt => (
+                        {['Дорого для такої якості', 'Ціна повністю виправдана', 'Дуже вигідно'].map(opt => (
                           <Pill key={opt} label={opt} selected={priceRating === opt} onClick={() => setPriceRating(opt)} />
                         ))}
                       </div>
                     </div>
-                    <div>
+                    <div className="space-y-3">
                       <QuestionLabel required>Чи порекомендуєте ви Marmoo друзям?</QuestionLabel>
                       <ScaleRating value={data.q16} onChange={(v) => updateData('q16', v)} start={0} end={10} minLabel="Точно ні" maxLabel="Обов'язково" />
                     </div>
@@ -358,26 +355,26 @@ export default function App() {
                 )}
 
                 {step === 9 && (
-                  <div>
+                  <div className="space-y-4">
                     <QuestionLabel>Ваші коментарі або слова підтримки для команди (Опційно):</QuestionLabel>
                     <TextInput multiline value={data.q17} onChange={(v) => updateData('q17', v)} placeholder="Пишіть все, що думаєте..." />
                   </div>
                 )}
 
                 {step === 10 && (
-                  <div className="text-center space-y-6 py-12 flex flex-col items-center justify-center min-h-[420px]">
-                     <div className="w-20 h-20 bg-brand-soft text-brand rounded-full flex items-center justify-center mb-2">
-                       <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                  <div className="text-center space-y-6 py-16 flex flex-col items-center justify-center min-h-[420px]">
+                     <div className="w-20 h-20 bg-[#F4F4F6] text-[#1A1A1A] rounded-full flex items-center justify-center mb-2">
+                       <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                      </div>
-                    <h1 className="text-3xl md:text-4xl font-serif text-ink mb-2">Дякуємо! ❤️</h1>
-                    <p className="text-lg md:text-xl text-muted max-w-md mx-auto mb-4">
+                    <h1 className="text-3xl md:text-4xl font-['Playfair_Display',serif] text-[#1A1A1A] mb-2 font-medium tracking-wide">Дякуємо! ❤️</h1>
+                    <p className="text-lg text-[#62616D] max-w-md mx-auto mb-6 font-light">
                       Ваш фідбек вже летить до шеф-кухаря та менеджерів закладу!
                     </p>
                     <button
                       onClick={handleReset}
-                      className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-border-line text-ink hover:bg-brand hover:text-white font-medium transition-all duration-200 shadow-sm mt-4 text-sm uppercase tracking-wider"
+                      className="inline-flex items-center gap-2.5 px-7 py-4 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333333] font-medium transition-all duration-200 shadow-md mt-2 text-xs uppercase tracking-[0.15em]"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <RefreshCw className="w-3.5 h-3.5" />
                       Заповнити ще раз
                     </button>
                   </div>
@@ -389,10 +386,14 @@ export default function App() {
 
         {/* Floating Bottom Bar */}
         {step < 10 && (
-          <div className="absolute bottom-0 w-full left-0 right-0 bg-card-bg/90 backdrop-blur-md border-t border-border-line p-5 md:px-12 flex justify-between gap-4 items-center">
+          <div className="absolute bottom-0 w-full left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#EEEDF2] p-5 md:px-12 flex justify-between gap-4 items-center z-10">
             <div className="flex-1">
               {step > 1 && (
-                <button onClick={handleBack} className="font-medium text-base text-muted hover:text-ink transition-colors py-2" disabled={isSubmitting}>
+                <button 
+                  onClick={handleBack} 
+                  className="font-semibold text-sm text-[#8A8994] hover:text-[#1A1A1A] transition-colors py-2 uppercase tracking-wider" 
+                  disabled={isSubmitting}
+                >
                   ← Назад
                 </button>
               )}
@@ -402,7 +403,7 @@ export default function App() {
                 <Button onClick={handleNext}>Розпочати</Button>
               ) : step === TOTAL_STEPS ? (
                 <Button onClick={handleSubmit} disabled={!isStepValid() || isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin h-6 w-6 mx-auto" /> : "Відправити"}
+                  {isSubmitting ? <Loader2 className="animate-spin h-5 w-5 mx-auto" /> : "Відправити"}
                 </Button>
               ) : (
                 <Button onClick={handleNext} disabled={!isStepValid()}>Далі →</Button>
