@@ -2,22 +2,29 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { defaultFeedbackData, FeedbackData } from './types';
 import { Button, Pill, StarRating, ScaleRating, TextInput, QuestionLabel } from './components/ui';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 
-// Зчитуємо URL-адресу з файлу .env
 const SCRIPT_URL = import.meta.env.VITE_API_URL || "";
-const TOTAL_STEPS = 8; // Крок 9 — це екран подяки "Thank you"
+const TOTAL_STEPS = 8; 
 
 export default function App() {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<FeedbackData>(defaultFeedbackData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Нові локальні стани для розширених текстових полів та оцінки цін
-  const [q3Text, setQ3Text] = useState(''); // Свій варіант атмосфери (Скріншот 1)
-  const [q11Text, setQ11Text] = useState(''); // Яка страва/напій і чому (Скріншот 2)
-  const [q13Text, setQ13Text] = useState(''); // Додатково про дискомфорт
-  const [priceRating, setPriceRating] = useState<string | null>(null); // Оцінка цін (Скріншот 4)
+  // Локальні стани для нових полів та умовної логіки від Олі
+  const [q3Text, setQ3Text] = useState(''); // Свій варіант атмосфери
+  const [q6Text, setQ6Text] = useState(''); // Свій варіант взаємодії з персоналом
+  
+  // Блок страви та меню (10-бальні шкали)
+  const [dishRating, setDishRating] = useState<number | null>(null);
+  const [dishComment, setDishComment] = useState('');
+  
+  const [menuRating, setMenuRating] = useState<number | null>(null);
+  const [menuComment, setMenuComment] = useState('');
+
+  const [q13Text, setQ13Text] = useState(''); // Дискомфорт зал
+  const [priceRating, setPriceRating] = useState<string | null>(null); // Оцінка цін
 
   const handleNext = () => {
     if (step < 9) setStep(step + 1);
@@ -27,22 +34,55 @@ export default function App() {
     if (step > 1) setStep(step - 1);
   };
 
+  // Функція для повного перезапуску анкети спочатку
+  const handleReset = () => {
+    setData(defaultFeedbackData);
+    setQ3Text('');
+    setQ6Text('');
+    setDishRating(null);
+    setDishComment('');
+    setMenuRating(null);
+    setMenuComment('');
+    setQ13Text('');
+    setPriceRating(null);
+    setStep(1);
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // 1. Збираємо атмосферу (чекбокси + свій варіант)
+      // 1. Взаємодія з персоналом (+ Свій варіант)
+      let finalQ6 = data.q6 || '';
+      if (q6Text.trim()) {
+        finalQ6 = finalQ6 ? `${finalQ6} (Свій варіант: ${q6Text.trim()})` : `Свій варіант: ${q6Text.trim()}`;
+      }
+
+      // 2. Інтеграція оцінки страви в q10 (Назва страви + Оцінка + Умовний коментар)
+      let finalQ10 = data.q10 || '';
+      if (dishRating !== null) {
+        finalQ10 = `Страва: ${finalQ10} [Оцінка: ${dishRating}/10]`;
+        if (dishRating < 7 && dishComment.trim()) {
+          finalQ10 += ` | Зауваження: ${dishComment.trim()}`;
+        }
+      }
+
+      // 3. Інтеграція оцінки меню в q11 (Вибрані чекбокси + Оцінка меню + Чого не вистачило)
+      const finalQ11 = [...data.q11];
+      if (menuRating !== null) {
+        let menuReport = `Оцінка меню: ${menuRating}/10`;
+        if (menuRating < 7 && menuComment.trim()) {
+          menuReport += ` (Чого не вистачило: ${menuComment.trim()})`;
+        }
+        finalQ11.unshift(menuReport);
+      }
+
+      // Атмосфера та дискомфорт
       const finalQ3 = [...data.q3];
       if (q3Text.trim()) finalQ3.push(`Свій варіант: ${q3Text.trim()}`);
 
-      // 2. Збираємо зауваження по їжі (чекбокси + деталі по стравах)
-      const finalQ11 = [...data.q11];
-      if (q11Text.trim()) finalQ11.push(`Що доопрацювати: ${q11Text.trim()}`);
-
-      // 3. Збираємо дискомфорт зал
       const finalQ13 = [...data.q13];
       if (q13Text.trim()) finalQ13.push(`Коментар: ${q13Text.trim()}`);
 
-      // 4. Формуємо блок про коментарі разом із оцінкою цін, щоб зберегти структуру колонок
       let finalQ17 = data.q17 || '';
       if (priceRating) {
         finalQ17 = `[Оцінка ціна/якість: ${priceRating}] ${finalQ17}`.trim();
@@ -54,11 +94,11 @@ export default function App() {
         q3: finalQ3.join(', '),
         q4: data.q4,
         q5: data.q5,
-        q6: data.q6,
+        q6: finalQ6,
         q7: Array.isArray(data.q7) ? data.q7.join(', ') : data.q7,
         q8: data.q8,
         q9: data.q9,
-        q10: data.q10,
+        q10: finalQ10,
         q11: finalQ11.join(', '),
         q12: data.q12,
         q13: finalQ13.join(', '),
@@ -105,8 +145,14 @@ export default function App() {
     switch (step) {
       case 2: return data.q1 !== null;
       case 3: return data.q2 !== null;
-      case 4: return data.q5 !== null && data.q6 !== null;
-      case 5: return data.q8 !== null && data.q9 !== null;
+      case 4: return (data.q6 !== null || q6Text.trim() !== '') && data.q5 !== null;
+      case 5: 
+        // Валідація для кроку їжі: назва страви, оцінка страви та оцінка меню обов'язкові
+        if (!data.q8 || !data.q9 || !data.q10.trim() || dishRating === null || menuRating === null) return false;
+        // Якщо оцінки < 7, текстові коментарі-пояснення стають обов'язковими
+        if (dishRating < 7 && !dishComment.trim()) return false;
+        if (menuRating < 7 && !menuComment.trim()) return false;
+        return true;
       case 6: return data.q12 !== null;
       case 7: return data.q14.trim() !== '' && data.q15 !== null && data.q16 !== null && priceRating !== null;
       default: return true;
@@ -189,7 +235,6 @@ export default function App() {
                           <Pill key={opt} label={opt} selected={data.q3.includes(opt)} onClick={() => toggleMulti('q3', opt)} />
                         ))}
                       </div>
-                      {/* Скріншот 1: Додано інпут для свого варіанту атмосфери */}
                       <div className="pt-2">
                         <QuestionLabel>Свій варіант або коментар до атмосфери:</QuestionLabel>
                         <TextInput value={q3Text} onChange={(v) => setQ3Text(v)} placeholder="Що саме вас вразило або заважало..." />
@@ -210,14 +255,19 @@ export default function App() {
                     </div>
                     <div>
                       <QuestionLabel required>Чи було вам комфортно взаємодіяти з персоналом?</QuestionLabel>
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 mb-4">
                         {[
                           'Так, усі були привітні', 
                           'Загалом все ок, але були непорозуміння', 
                           'Ні, виникли труднощі'
                         ].map(opt => (
-                          <Pill key={opt} label={opt} selected={data.q6 === opt} onClick={() => updateData('q6', opt)} />
+                          <Pill key={opt} label={opt} selected={data.q6 === opt} onClick={() => { updateData('q6', opt); }} />
                         ))}
+                      </div>
+                      {/* Нове поле: Свій варіант взаємодії з персоналом */}
+                      <div className="pt-2">
+                        <QuestionLabel>Або напишіть свій варіант взаємодії:</QuestionLabel>
+                        <TextInput value={q6Text} onChange={(v) => setQ6Text(v)} placeholder="Ваша відповідь чи уточнення..." />
                       </div>
                     </div>
                     <div>
@@ -233,30 +283,64 @@ export default function App() {
 
                 {step === 5 && (
                   <div className="space-y-10">
-                    <div>
-                      <QuestionLabel required>Як вам смак страв та напоїв?</QuestionLabel>
-                      <StarRating value={data.q8} onChange={(v) => updateData('q8', v)} />
-                    </div>
-                    <div>
-                      <QuestionLabel required>Як ви оцінюєте подачу та вигляд страв?</QuestionLabel>
-                      <StarRating value={data.q9} onChange={(v) => updateData('q9', v)} />
-                    </div>
-                    <div>
-                      <QuestionLabel>Яка страва/напій сподобались найбільше?</QuestionLabel>
-                      <TextInput value={data.q10} onChange={(v) => updateData('q10', v)} placeholder="Назва страви чи напою..." />
-                    </div>
-                    <div>
-                      <QuestionLabel>Що сподобалось найменше або потребує доопрацювання?</QuestionLabel>
-                      <div className="flex flex-wrap gap-2.5 mb-4">
-                        {['Температура страви', 'Баланс смаку', 'Розмір порції', 'Усе було смачно'].map(opt => (
-                          <Pill key={opt} label={opt} selected={data.q11.includes(opt)} onClick={() => toggleMulti('q11', opt)} />
-                        ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <QuestionLabel required>Як вам смак страв та напоїв?</QuestionLabel>
+                        <StarRating value={data.q8} onChange={(v) => updateData('q8', v)} />
                       </div>
-                      {/* Скріншот 2: Деталізація зауважень щодо меню */}
-                      <div className="pt-2">
-                        <QuestionLabel>Яка страва чи напій потребує доопрацювання і чому? (Опційно):</QuestionLabel>
-                        <TextInput value={q11Text} onChange={(v) => setQ11Text(v)} placeholder="Наприклад: Салат занадто солоний, кава захолодна..." />
+                      <div>
+                        <QuestionLabel required>Як ви оцінюєте подачу та вигляд страв?</QuestionLabel>
+                        <StarRating value={data.q9} onChange={(v) => updateData('q9', v)} />
                       </div>
+                    </div>
+
+                    {/* Блок Олі №1: Конкретна страва та її оцінка */}
+                    <div className="bg-bg-app/50 p-5 rounded-2xl border border-border-line space-y-5">
+                      <div>
+                        <QuestionLabel required>Яку страву або напій ви куштували сьогодні?</QuestionLabel>
+                        <TextInput value={data.q10} onChange={(v) => updateData('q10', v)} placeholder="Назва страви або напою..." />
+                      </div>
+                      
+                      {data.q10.trim() !== '' && (
+                        <div>
+                          <QuestionLabel required>Наскільки оціните цю страв («{data.q10}»)?</QuestionLabel>
+                          <ScaleRating 
+                            value={dishRating} 
+                            onChange={(v) => setDishRating(v)} 
+                            start={1} end={10}
+                            minLabel="Жахливо" maxLabel="Ідеально" 
+                          />
+                        </div>
+                      )}
+
+                      {/* Умовне відкрите питання, якщо оцінка страви менше 7 */}
+                      {dishRating !== null && dishRating < 7 && (
+                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="pt-2">
+                          <QuestionLabel required>Що саме не сподобалось у цій страві та потребує доопрацювання?</QuestionLabel>
+                          <TextInput value={dishComment} onChange={(v) => setDishComment(v)} placeholder="Опишіть детально баланс смаку, температуру чи подачу..." />
+                        </motion.div>
+                      )}
+                    </div>
+
+                    {/* Блок Олі №2: Задоволеність меню загалом */}
+                    <div className="bg-bg-app/50 p-5 rounded-2xl border border-border-line space-y-5">
+                      <div>
+                        <QuestionLabel required>Наскільки ви задоволені меню загалом (асортимент)?</QuestionLabel>
+                        <ScaleRating 
+                          value={menuRating} 
+                          onChange={(v) => setMenuRating(v)} 
+                          start={1} end={10}
+                          minLabel="Повністю не задовільняє" maxLabel="Повністю задовільняє" 
+                        />
+                      </div>
+
+                      {/* Умовне відкрите питання, якщо оцінка меню менше 7 */}
+                      {menuRating !== null && menuRating < 7 && (
+                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="pt-2">
+                          <QuestionLabel required>Чого саме вам не вистачило в меню? Що змінити?</QuestionLabel>
+                          <TextInput value={menuComment} onChange={(v) => setMenuComment(v)} placeholder="Яких страв, напоїв чи категорій бракує..." />
+                        </motion.div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -289,20 +373,14 @@ export default function App() {
                       <TextInput value={data.q14} onChange={(v) => updateData('q14', v)} placeholder="Ваша відповідь..." />
                     </div>
                     <div>
-                      {/* Скріншот 3: Оновлені м'які варіанти повернення */}
                       <QuestionLabel required>Чи повернулися б ви до Marmoo знову?</QuestionLabel>
                       <div className="flex flex-col gap-3">
-                        {[
-                          "Обов'язково", 
-                          'Скоріш за все так', 
-                          'Є сумніви / Поки ні'
-                        ].map(opt => (
+                        {["Обов'язково", 'Скоріш за все так', 'Є сумніви / Поки ні'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q15 === opt} onClick={() => updateData('q15', opt)} />
                         ))}
                       </div>
                     </div>
                     
-                    {/* Скріншот 4: Новий інтегрований блок про ціни */}
                     <div>
                       <QuestionLabel required>Як ви оцінюєте співвідношення ціни та якості у Marmoo?</QuestionLabel>
                       <div className="flex flex-col gap-3">
@@ -336,14 +414,23 @@ export default function App() {
                 )}
 
                 {step === 9 && (
-                  <div className="text-center space-y-6 py-16 flex flex-col items-center justify-center min-h-[400px]">
+                  <div className="text-center space-y-6 py-12 flex flex-col items-center justify-center min-h-[420px]">
                      <div className="w-20 h-20 bg-brand-soft text-brand rounded-full flex items-center justify-center mb-2">
                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                      </div>
                     <h1 className="text-3xl md:text-4xl font-serif text-ink mb-2">Дякуємо! ❤️</h1>
-                    <p className="text-lg md:text-xl text-muted leading-relaxed max-w-md mx-auto">
+                    <p className="text-lg md:text-xl text-muted leading-relaxed max-w-md mx-auto mb-4">
                       Ваш фідбек вже летить до шеф-кухаря та менеджерів. Чекаємо на вас знову на офіційному відкритті!
                     </p>
+                    
+                    {/* Кнопка «Заповнити ще раз» від Олі */}
+                    <button
+                      onClick={handleReset}
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-border-line text-ink hover:bg-brand hover:text-white font-medium transition-all duration-200 shadow-sm mt-4 text-sm uppercase tracking-wider"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Заповнити ще раз
+                    </button>
                   </div>
                 )}
               </div>
