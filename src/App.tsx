@@ -24,6 +24,10 @@ export default function App() {
   const [q13Text, setQ13Text] = useState(''); 
   const [priceRating, setPriceRating] = useState<string | null>(null); 
 
+  // Нові стани для демографії (необов'язкові)
+  const [gender, setGender] = useState<string | null>(null);
+  const [ageGroup, setAgeGroup] = useState<string | null>(null);
+
   const handleNext = () => {
     if (step < 10) setStep(step + 1);
   };
@@ -42,6 +46,8 @@ export default function App() {
     setMenuComment('');
     setQ13Text('');
     setPriceRating(null);
+    setGender(null);
+    setAgeGroup(null);
     setStep(1);
   };
 
@@ -79,6 +85,15 @@ export default function App() {
       let finalQ17 = data.q17 || '';
       if (priceRating) {
         finalQ17 = `[Оцінка ціна/якість: ${priceRating}] ${finalQ17}`.trim();
+      }
+
+      // Елегантне додавання демографічних даних на початок фінального коментаря
+      let demoPrefix = '';
+      if (gender) demoPrefix += `[Стать: ${gender}] `;
+      if (ageGroup) demoPrefix += `[Вік: ${ageGroup}] `;
+      
+      if (demoPrefix) {
+        finalQ17 = `${demoPrefix}${finalQ17}`.trim();
       }
 
       const payload = {
@@ -140,7 +155,7 @@ export default function App() {
       case 6: return menuRating !== null && (menuRating >= 7 || menuComment.trim() !== '');
       case 7: return data.q12 !== null;
       case 8: return data.q14.trim() !== '' && data.q15 !== null && data.q16 !== null && priceRating !== null;
-      case 9: return true; // Питання опційне, завжди валідне для активації кнопки відправки
+      case 9: return true; 
       default: return true;
     }
   };
@@ -188,7 +203,7 @@ export default function App() {
                       Привіт від команди Marmoo! 🥂
                     </h1>
                     <p className="text-lg text-[#62616D] leading-relaxed max-w-lg mx-auto font-light">
-                      Дякуємо, що завітали на наше відкриття. Ваша чесна думка допоможе нам стати ідеальними.
+                      Дякуємо, що завітали до молодого закладу MARMOO. Ваша чесна думка допоможе нам стати ідеальними.
                     </p>
                   </div>
                 )}
@@ -354,9 +369,32 @@ export default function App() {
                 )}
 
                 {step === 9 && (
-                  <div className="space-y-4">
-                    <QuestionLabel>Ваші коментарі або слова підтримки для команди (Опційно):</QuestionLabel>
-                    <TextInput multiline value={data.q17} onChange={(v) => updateData('q17', v)} placeholder="Пишіть все, що думаєте..." />
+                  <div className="space-y-6">
+                    {/* Питання про стать */}
+                    <div className="space-y-3">
+                      <QuestionLabel>Ваша стать (Опційно):</QuestionLabel>
+                      <div className="flex gap-3">
+                        {['Жіноча', 'Чоловіча'].map(opt => (
+                          <Pill key={opt} label={opt} selected={gender === opt} onClick={() => setGender(gender === opt ? null : opt)} />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Питання про вік */}
+                    <div className="space-y-3 pt-2">
+                      <QuestionLabel>Ваш вік (Опційно):</QuestionLabel>
+                      <div className="flex flex-wrap gap-2">
+                        {['до 18', '18-24', '25-34', '35-44', '45-54', '55+'].map(opt => (
+                          <Pill key={opt} label={opt} selected={ageGroup === opt} onClick={() => setAgeGroup(ageGroup === opt ? null : opt)} />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Поле коментаря */}
+                    <div className="space-y-3 pt-2">
+                      <QuestionLabel>Ваші коментарі або слова підтримки для команди (Опційно):</QuestionLabel>
+                      <TextInput multiline value={data.q17} onChange={(v) => updateData('q17', v)} placeholder="Пишіть все, що думаєте..." />
+                    </div>
                   </div>
                 )}
 
