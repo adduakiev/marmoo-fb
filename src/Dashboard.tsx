@@ -6,7 +6,7 @@ import {
   Users, Star, Clock, Utensils, ShieldAlert, Loader2, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 
-const SCRIPT_URL = import.meta.env.VITE_API_URL || "";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec";
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
