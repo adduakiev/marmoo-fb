@@ -24,9 +24,12 @@ export default function App() {
   const [q13Text, setQ13Text] = useState(''); 
   const [priceRating, setPriceRating] = useState<string | null>(null); 
 
-  // Нові стани для демографії (необов'язкові)
+  // Стан для демографії
   const [gender, setGender] = useState<string | null>(null);
   const [ageGroup, setAgeGroup] = useState<string | null>(null);
+
+  // Новий стан для оцінки часу очікування страв
+  const [waitingRating, setWaitingRating] = useState<number | null>(null);
 
   const handleNext = () => {
     if (step < 10) setStep(step + 1);
@@ -48,6 +51,7 @@ export default function App() {
     setPriceRating(null);
     setGender(null);
     setAgeGroup(null);
+    setWaitingRating(null);
     setStep(1);
   };
 
@@ -87,13 +91,18 @@ export default function App() {
         finalQ17 = `[Оцінка ціна/якість: ${priceRating}] ${finalQ17}`.trim();
       }
 
-      // Елегантне додавання демографічних даних на початок фінального коментаря
       let demoPrefix = '';
       if (gender) demoPrefix += `[Стать: ${gender}] `;
       if (ageGroup) demoPrefix += `[Вік: ${ageGroup}] `;
       
       if (demoPrefix) {
         finalQ17 = `${demoPrefix}${finalQ17}`.trim();
+      }
+
+      // Інтеграція оцінки очікування страв у поле q7 (сервіс/обслуговування)
+      const finalQ7 = [...data.q7];
+      if (waitingRating !== null) {
+        finalQ7.unshift(`[Час очікування страв: ${waitingRating}/10]`);
       }
 
       const payload = {
@@ -103,7 +112,7 @@ export default function App() {
         q4: data.q4,
         q5: data.q5,
         q6: finalQ6,
-        q7: Array.isArray(data.q7) ? data.q7.join(', ') : data.q7,
+        q7: finalQ7.join(', '),
         q8: data.q8,
         q9: data.q9,
         q10: finalQ10,
@@ -150,7 +159,7 @@ export default function App() {
     switch (step) {
       case 2: return data.q1 !== null;
       case 3: return data.q2 !== null;
-      case 4: return (data.q6 !== null || q6Text.trim() !== '') && data.q5 !== null;
+      case 4: return data.q5 !== null && (data.q6 !== null || q6Text.trim() !== '') && waitingRating !== null;
       case 5: return data.q8 !== null && data.q9 !== null && data.q10.trim() !== '' && dishRating !== null && (dishRating >= 7 || dishComment.trim() !== '');
       case 6: return menuRating !== null && (menuRating >= 7 || menuComment.trim() !== '');
       case 7: return data.q12 !== null;
@@ -203,7 +212,7 @@ export default function App() {
                       Привіт від команди Marmoo! 🥂
                     </h1>
                     <p className="text-lg text-[#62616D] leading-relaxed max-w-lg mx-auto font-light">
-                      Дякуємо, що завітали до молодого закладу MARMOO. Ваша чесна думка допоможе нам стати ідеальними.
+                      Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стати ідеальними.
                     </p>
                   </div>
                 )}
@@ -243,6 +252,12 @@ export default function App() {
                       <QuestionLabel required>Як ви оцінюєте роботу команди (сервіс)?</QuestionLabel>
                       <StarRating value={data.q5} onChange={(v) => updateData('q5', v)} />
                     </div>
+                    
+                    <div className="bg-white/70 p-6 rounded-2xl border border-[#EEEDF2] space-y-3">
+                      <QuestionLabel required>Наскільки ви задоволені швидкістю видачі страв?</QuestionLabel>
+                      <ScaleRating value={waitingRating} onChange={(v) => setWaitingRating(v)} start={1} end={10} minLabel="Дуже довго" maxLabel="Миттєво" />
+                    </div>
+
                     <div className="space-y-4">
                       <QuestionLabel required>Чи було вам комфортно взаємодіяти з персоналом?</QuestionLabel>
                       <div className="flex flex-col gap-2.5">
@@ -253,9 +268,9 @@ export default function App() {
                       <TextInput value={q6Text} onChange={(v) => setQ6Text(v)} placeholder="Або напишіть свій варіант..." />
                     </div>
                     <div className="space-y-3">
-                      <QuestionLabel>Що варто покращити в обслуговуванні?</QuestionLabel>
+                      <QuestionLabel>Що варто покращити в обслуговуванні? (Опційно)</QuestionLabel>
                       <div className="flex flex-wrap gap-2">
-                        {['Швидкість винесення страв', 'Уважність офіціанта', 'Знання меню', 'Швидкість розрахунку', 'Усе було супер'].map(opt => (
+                        {['Уважність офіціанта', 'Знання меню', 'Швидкість розрахунку', 'Усе було супер'].map(opt => (
                           <Pill key={opt} label={opt} selected={data.q7.includes(opt)} onClick={() => toggleMulti('q7', opt)} />
                         ))}
                       </div>
@@ -370,7 +385,6 @@ export default function App() {
 
                 {step === 9 && (
                   <div className="space-y-6">
-                    {/* Питання про стать */}
                     <div className="space-y-3">
                       <QuestionLabel>Ваша стать (Опційно):</QuestionLabel>
                       <div className="flex gap-3">
@@ -380,7 +394,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Питання про вік */}
                     <div className="space-y-3 pt-2">
                       <QuestionLabel>Ваш вік (Опційно):</QuestionLabel>
                       <div className="flex flex-wrap gap-2">
@@ -390,7 +403,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Поле коментаря */}
                     <div className="space-y-3 pt-2">
                       <QuestionLabel>Ваші коментарі або слова підтримки для команди (Опційно):</QuestionLabel>
                       <TextInput multiline value={data.q17} onChange={(v) => updateData('q17', v)} placeholder="Пишіть все, що думаєте..." />
