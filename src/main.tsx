@@ -4,18 +4,19 @@ import App from './App.tsx';
 import Dashboard from './Dashboard.tsx';
 import './index.css';
 
-// Отримуємо всі можливі варіанти написання з адресного рядка
-const href = window.location.href.toLowerCase();
+// 1. Перевіряємо параметри запиту (?view=dashboard)
 const searchParams = new URLSearchParams(window.location.search);
-const currentView = searchParams.get('view');
-const hasHash = window.location.hash.toLowerCase() === '#dashboard';
+const isDashboardParam = searchParams.get('view') === 'dashboard';
 
-// Якщо в URL є параметр view=dashboard, або хеш #dashboard, або просто слово dashboard в кінці шляху
-const showDashboard = currentView === 'dashboard' || hasHash || href.includes('dashboard');
+// 2. Перевіряємо хеш у URL (#dashboard)
+const isDashboardHash = window.location.hash === '#dashboard' || window.location.hash === '#/dashboard';
+
+// Якщо спрацював хоча б один із варіантів — вмикаємо BI-панель
+const shouldShowDashboard = isDashboardParam || isDashboardHash;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {showDashboard ? (
+    {shouldShowDashboard ? (
       <Dashboard />
     ) : (
       <App />
