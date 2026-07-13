@@ -9,13 +9,223 @@
   --color-ink: #1a1a1a;
   --color-muted: #6b7280;
   --color-border-line: #e5e7eb;
-  
   --font-sans: 'Helvetica Neue', Arial, sans-serif;
   --font-serif: 'Georgia', serif;
 }
 
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
+  margin: 0;
   font-family: var(--font-sans);
   background-color: var(--color-bg-app);
   color: var(--color-ink);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+select,
+input,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #cff3f2;
+  outline-offset: 3px;
+}
+
+/* Premium MARMOO dashboard polish. Scoped only when BI charts are present. */
+body:has(.recharts-wrapper) {
+  color-scheme: dark;
+  background: #310611;
+}
+
+body:has(.recharts-wrapper) ::selection {
+  background: #cff3f2;
+  color: #4a0e17;
+}
+
+body:has(.recharts-wrapper) button,
+body:has(.recharts-wrapper) [role="button"] {
+  transition: transform .22s ease, border-color .22s ease, background-color .22s ease, box-shadow .22s ease, opacity .22s ease;
+}
+
+body:has(.recharts-wrapper) button:hover,
+body:has(.recharts-wrapper) [role="button"]:hover {
+  box-shadow: 0 14px 36px rgba(15, 1, 7, .24);
+}
+
+body:has(.recharts-wrapper) button:active,
+body:has(.recharts-wrapper) [role="button"]:active {
+  transform: translateY(1px) scale(.995);
+}
+
+body:has(.recharts-wrapper) select,
+body:has(.recharts-wrapper) input[type="date"],
+body:has(.recharts-wrapper) input[type="search"],
+body:has(.recharts-wrapper) input[type="text"] {
+  color: #f8f1ed;
+  background-color: rgba(63, 6, 24, .96);
+  border-color: rgba(207, 243, 242, .14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035), 0 8px 24px rgba(18, 1, 7, .16);
+}
+
+body:has(.recharts-wrapper) select:hover,
+body:has(.recharts-wrapper) input:hover {
+  border-color: rgba(207, 243, 242, .32);
+}
+
+body:has(.recharts-wrapper) select:focus,
+body:has(.recharts-wrapper) input:focus {
+  border-color: rgba(207, 243, 242, .56);
+  box-shadow: 0 0 0 4px rgba(207, 243, 242, .08), 0 12px 28px rgba(18, 1, 7, .22);
+}
+
+body:has(.recharts-wrapper) select option {
+  color: #fff8f2;
+  background: #3a0817;
+}
+
+body:has(.recharts-wrapper) input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) sepia(.15) saturate(.6) brightness(1.3);
+  opacity: .72;
+  cursor: pointer;
+}
+
+/* Recharts native/default tooltips */
+body:has(.recharts-wrapper) .recharts-tooltip-wrapper {
+  z-index: 60 !important;
+  filter: drop-shadow(0 18px 34px rgba(14, 0, 6, .42));
+  pointer-events: none !important;
+}
+
+body:has(.recharts-wrapper) .recharts-default-tooltip {
+  min-width: 168px;
+  padding: 14px 16px !important;
+  color: #fff8f2 !important;
+  background: linear-gradient(145deg, rgba(50, 5, 18, .98), rgba(86, 13, 38, .98)) !important;
+  border: 1px solid rgba(207, 243, 242, .2) !important;
+  border-radius: 18px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 18px 44px rgba(10, 0, 5, .32) !important;
+  backdrop-filter: blur(18px);
+}
+
+body:has(.recharts-wrapper) .recharts-tooltip-label {
+  margin-bottom: 8px !important;
+  color: #cbb5bd !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+body:has(.recharts-wrapper) .recharts-tooltip-item-list {
+  margin: 0 !important;
+}
+
+body:has(.recharts-wrapper) .recharts-tooltip-item {
+  padding: 3px 0 !important;
+  color: #fff8f2 !important;
+  font-size: 13px !important;
+}
+
+body:has(.recharts-wrapper) .recharts-tooltip-item-name,
+body:has(.recharts-wrapper) .recharts-tooltip-item-value,
+body:has(.recharts-wrapper) .recharts-tooltip-item-separator {
+  color: inherit !important;
+}
+
+body:has(.recharts-wrapper) .recharts-cartesian-axis-tick-value,
+body:has(.recharts-wrapper) .recharts-polar-angle-axis-tick-value {
+  fill: rgba(255, 248, 242, .48);
+  font-size: 12px;
+}
+
+body:has(.recharts-wrapper) .recharts-cartesian-grid line,
+body:has(.recharts-wrapper) .recharts-polar-grid-concentric-polygon,
+body:has(.recharts-wrapper) .recharts-polar-grid-angle line {
+  stroke: rgba(201, 243, 241, .12);
+}
+
+body:has(.recharts-wrapper) .recharts-legend-item-text {
+  color: rgba(255, 248, 242, .62) !important;
+  font-size: 12px;
+}
+
+body:has(.recharts-wrapper) .recharts-surface {
+  overflow: visible;
+}
+
+body:has(.recharts-wrapper) .recharts-sector,
+body:has(.recharts-wrapper) .recharts-rectangle,
+body:has(.recharts-wrapper) .recharts-area-area,
+body:has(.recharts-wrapper) .recharts-radar-polygon {
+  transition: opacity .2s ease, filter .2s ease;
+}
+
+body:has(.recharts-wrapper) .recharts-sector:hover,
+body:has(.recharts-wrapper) .recharts-rectangle:hover,
+body:has(.recharts-wrapper) .recharts-radar-polygon:hover {
+  opacity: .88;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .22));
+}
+
+/* Scrollbars */
+body:has(.recharts-wrapper) * {
+  scrollbar-width: thin;
+  scrollbar-color: #8d3553 #2a0610;
+}
+
+body:has(.recharts-wrapper) *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+body:has(.recharts-wrapper) *::-webkit-scrollbar-track {
+  background: #2a0610;
+}
+
+body:has(.recharts-wrapper) *::-webkit-scrollbar-thumb {
+  background: linear-gradient(#8d3553, #63203a);
+  border: 2px solid #2a0610;
+  border-radius: 999px;
+}
+
+body:has(.recharts-wrapper) *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(#b24b70, #7a2a48);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
