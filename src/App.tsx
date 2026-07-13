@@ -28,7 +28,7 @@ export default function App() {
   const [gender, setGender] = useState<string | null>(null);
   const [ageGroup, setAgeGroup] = useState<string | null>(null);
 
-  // Новий стан для оцінки часу очікування страв
+  // Стан для оцінки часу очікування страв
   const [waitingRating, setWaitingRating] = useState<number | null>(null);
 
   const handleNext = () => {
@@ -58,19 +58,13 @@ export default function App() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      // 1. Збір кастомного варіанту взаємодії з персоналом
       let finalQ6 = data.q6 || '';
       if (q6Text.trim()) {
         finalQ6 = finalQ6 ? `${finalQ6} (Свій варіант: ${q6Text.trim()})` : `Свій варіант: ${q6Text.trim()}`;
       }
 
-      let finalQ10 = data.q10 || '';
-      if (dishRating !== null) {
-        finalQ10 = `Страва: ${finalQ10} [Оцінка: ${dishRating}/10]`;
-        if (dishRating < 7 && dishComment.trim()) {
-          finalQ10 += ` | Зауваження: ${dishComment.trim()}`;
-        }
-      }
-
+      // 2. Збір зауважень до меню
       const finalQ11 = [...data.q11];
       if (menuRating !== null) {
         let menuReport = `Оцінка меню: ${menuRating}/10`;
@@ -80,31 +74,27 @@ export default function App() {
         finalQ11.unshift(menuReport);
       }
 
+      // 3. Збір кастомних елементів атмосфери
       const finalQ3 = [...data.q3];
       if (q3Text.trim()) finalQ3.push(`Свій варіант: ${q3Text.trim()}`);
 
+      // 4. Збір зауважень до зручності залу
       const finalQ13 = [...data.q13];
       if (q13Text.trim()) finalQ13.push(`Коментар: ${q13Text.trim()}`);
 
-      let finalQ17 = data.q17 || '';
-      if (priceRating) {
-        finalQ17 = `[Оцінка ціна/якість: ${priceRating}] ${finalQ17}`.trim();
-      }
-
-      let demoPrefix = '';
-      if (gender) demoPrefix += `[Стать: ${gender}] `;
-      if (ageGroup) demoPrefix += `[Вік: ${ageGroup}] `;
-      
-      if (demoPrefix) {
-        finalQ17 = `${demoPrefix}${finalQ17}`.trim();
-      }
-
-      // Інтеграція оцінки очікування страв у поле q7 (сервіс/обслуговування)
+      // 5. Збір зауважень щодо сервісу та часу очікування
       const finalQ7 = [...data.q7];
       if (waitingRating !== null) {
         finalQ7.unshift(`[Час очікування страв: ${waitingRating}/10]`);
       }
 
+      // 6. Формування фінального чистого коментаря разом з ціною/якістю
+      let finalQ17 = data.q17 || '';
+      if (priceRating) {
+        finalQ17 = `[Оцінка ціна/якість: ${priceRating}] ${finalQ17}`.trim();
+      }
+
+      // Формуємо ідеально структурований payload під нові таблиці
       const payload = {
         q1: data.q1,
         q2: data.q2,
@@ -115,7 +105,7 @@ export default function App() {
         q7: finalQ7.join(', '),
         q8: data.q8,
         q9: data.q9,
-        q10: finalQ10,
+        q10: data.q10, // Тут передаємо суху назву першої страви
         q11: finalQ11.join(', '),
         q12: data.q12,
         q13: finalQ13.join(', '),
@@ -123,6 +113,11 @@ export default function App() {
         q15: data.q15,
         q16: data.q16,
         q17: finalQ17,
+        // Окремі винесені BI-метрики
+        gender: gender || '',
+        ageGroup: ageGroup || '',
+        dishRating: dishRating !== null ? dishRating : '',
+        dishComment: dishComment.trim() || ''
       };
 
       if (SCRIPT_URL) {
@@ -212,7 +207,7 @@ export default function App() {
                       Привіт від команди Marmoo! 🥂
                     </h1>
                     <p className="text-lg text-[#62616D] leading-relaxed max-w-lg mx-auto font-light">
-                      Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стати ідеальними.
+                      Дякуємо, що завітали на наше технічне відкриття. Ваша чесна думка допоможе нам стать ідеальними.
                     </p>
                   </div>
                 )}
