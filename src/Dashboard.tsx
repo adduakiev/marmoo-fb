@@ -1,327 +1,146 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { 
-  Users, Star, Utensils, ShieldAlert, Loader2, Heart, Award, Frown, TrendingUp
+import {
+  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CheckCircle2,
+  ChevronRight, Download, Filter, Gauge, Heart, LayoutDashboard, Loader2,
+  MessageSquareText, RefreshCw, Search, ShieldAlert, Sparkles, Star, Target,
+  TrendingUp, Users, UtensilsCrossed, X,
 } from 'lucide-react';
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec";
+const SCRIPT_URL = import.meta.env.VITE_API_URL || 'https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec';
+const C = { cyan:'#CFF3F2', cyan2:'#8DE0DE', gold:'#F3C969', rose:'#F08AA5', green:'#79D7B4', muted:'#CBB5BD', grid:'#7D3046' };
+const DAY = 86400000;
 
-export default function Dashboard() {
-  const [loading, setLoading] = useState(true);
-  const [rawData, setRawData] = useState<{ general: any[]; dishes: any[] }>({ general: [], dishes: [] });
-  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+type Row = Record<string, unknown>;
+type Preset = 'all'|'day'|'week'|'month'|'30d'|'custom';
+type Grain = 'day'|'week'|'month';
+type Metric = 'responses'|'nps'|'experience'|'service'|'taste'|'return';
+type NpsFilter = 'all'|'promoter'|'passive'|'detractor';
+type Range = { start: Date; end: Date };
+type Theme = { key:string; label:string; count:number; samples:string[]; tone:'positive'|'negative'; priority:number };
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch(SCRIPT_URL);
-        const json = await res.json();
-        setRawData(json);
-      } catch (err) {
-        console.error("Помилка завантаження даних:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+const A = {
+  id:['ID','Response ID'], date:['Timestamp','Date'], total:['Total Score (q1)','Q1_General'], ambience:['Ambience Rating (q2)','Q2_Atmosphere_Rating'],
+  ambienceText:['Ambience Matches (q3)','Q3_Atmosphere_Likes'], hall:['Hall Improvements (q4)','Q4_Atmosphere_Improvements'],
+  service:['Service Rating (q5)','Q5_Service_Rating'], staff:['Staff Comfort (q6)','Q6_Service_Comfort'], serviceText:['Service Improvements (q7)','Q7_Service_Improvements'],
+  taste:['Food Taste (q8)','Q8_Food_Taste'], presentation:['Food Presentation (q9)','Q9_Food_Presentation'], comfort:['Stay Comfort (q12)','Q12_Comfort_Rating'],
+  discomfort:['Stay Discomfort (q13)','Q13_Comfort_Dislikes'], critical:['CRITICAL FIX (q14)','Q14_Priority_Fix'], ret:['Will Return (q15)','Q15_Return_Intent'],
+  nps:['NPS Score (q16)','Q16_NPS'], comment:['User Comment (q17)','Q17_Comments'], gender:['Gender'], age:['Age Group','AgeGroup'],
+  dishId:['Response ID','ID'], dishName:['Dish Name'], dishRating:['Dish Rating'], dishComment:['Dish Comment'],
+} as const;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#4A0E17] flex flex-col items-center justify-center p-4 font-sans text-[#FFF8F2]">
-        <Loader2 className="w-12 h-12 animate-spin text-[#E8DCC4] mb-4" />
-        <p className="text-sm uppercase tracking-[0.2em] font-light">Завантаження MARMOO EXECUTIVE BOARD...</p>
-      </div>
-    );
-  }
+const NEG = [
+  ['menu','Меню / асортимент',['меню','позиці','вибір','асортимент','дитяч']], ['bar','Бар / алкоголь',['алког','пиво','коктейл','бар']],
+  ['speed','Швидкість видачі',['швидк','очікуван','довго','винесен','приготуван']], ['service','Уважність / сервіс',['уважн','офіціант','персонал','розрахунк','непорозум']],
+  ['climate','Температура / клімат',['температур','прохолод','холод','жарко']], ['hall','Столи / ергономіка',['столи','стільчик','близько','прохід']],
+  ['access','Доступність / родини',['доступн','маломоб','підгуз','дитин','малюк','куточок']], ['ops','Операційні дрібниці',['сервет','зубочист','спеці','вода','антисеп','урна','смітник']],
+  ['taste','Смак / рецептура',['соус','прожарк','м’яс',"м'яс",'смак','теплим','стейк не стейк']], ['light','Світло / музика',['освітлен','світло','музик','гучн']],
+] as const;
+const POS = [
+  ['staff','Привітність персоналу',['привітн','офіціант','персонал','команда','адміністратор','олександр']], ['interior','Інтер’єр',['інтер\'єр','інтер’єр','декор']],
+  ['clean','Чистота',['чистот']], ['music','Музика',['музик','гучн']], ['light','Освітлення',['освітлен','світло']],
+  ['food','Смак страв',['смач','смак','неперевершен']], ['value','Ціна / цінність',['дуже вигідно','ціна повністю виправдана']], ['overall','Усе сподобалось',['усе сподобалось','все супер','все чудово','бездоган']],
+] as const;
+const METRICS:{key:Metric;label:string;color:string;domain?:[number,number]}[] = [
+  {key:'responses',label:'Відповіді',color:C.cyan2},{key:'nps',label:'NPS',color:C.gold,domain:[-100,100]},
+  {key:'experience',label:'Experience Index',color:C.cyan,domain:[0,100]},{key:'service',label:'Сервіс',color:C.green,domain:[0,5]},
+  {key:'taste',label:'Смак',color:C.rose,domain:[0,5]},{key:'return',label:'Точно повернуться',color:'#D9B6FF',domain:[0,100]},
+];
 
-  const general = rawData.general || [];
-  const dishes = rawData.dishes || [];
+const pick=(r:Row,keys:readonly string[])=>{for(const k of keys)if(r[k]!==undefined&&r[k]!==null&&r[k]!=='')return r[k];};
+const txt=(r:Row,keys:readonly string[])=>String(pick(r,keys)??'').trim();
+const num=(r:Row,keys:readonly string[])=>{const v=pick(r,keys);if(v===undefined||v===null||v==='')return null;const n=Number(String(v).replace(',','.'));return Number.isFinite(n)?n:null;};
+const date=(v:unknown)=>{const s=String(v??'').trim();const m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})(?:[ T](\d{1,2}):?(\d{2})?:?(\d{2})?)?/);if(m){const d=new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0),+(m[6]||0));return Number.isNaN(d.getTime())?null:d;}const d=new Date(s);return Number.isNaN(d.getTime())?null:d;};
+const sod=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+const eod=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59,999);
+const add=(d:Date,n:number)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+const sow=(d:Date)=>{const x=sod(d),day=x.getDay();x.setDate(x.getDate()+(day===0?-6:1-day));return x;};
+const som=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),1);
+const clamp=(r:Range)=>({start:sod(r.start),end:eod(r.end)});
+const iso=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const inRange=(d:Date|null,r:Range)=>!!d&&d>=r.start&&d<=r.end;
+const avg=(a:(number|null)[])=>{const v=a.filter((x):x is number=>x!==null&&Number.isFinite(x));return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+const fmt=(v:number|null,d=1)=>v===null||!Number.isFinite(v)?'—':new Intl.NumberFormat('uk-UA',{minimumFractionDigits:d,maximumFractionDigits:d}).format(v);
+const fd=(d:Date|null,opt?:Intl.DateTimeFormatOptions)=>d?new Intl.DateTimeFormat('uk-UA',opt||{day:'2-digit',month:'2-digit',year:'numeric'}).format(d):'—';
+const norm=(s:string)=>s.toLowerCase().replace(/[’ʼ]/g,"'").replace(/\s+/g,' ').trim();
+const npsClass=(r:Row):Exclude<NpsFilter,'all'>|'unknown'=>{const n=num(r,A.nps);return n===null?'unknown':n>=9?'promoter':n<=6?'detractor':'passive';};
+const calcNps=(rows:Row[])=>{let promoters=0,passives=0,detractors=0;rows.forEach(r=>{const n=num(r,A.nps);if(n===null)return;n>=9?promoters++:n<=6?detractors++:passives++;});const t=promoters+passives+detractors;return{score:t?Math.round((promoters-detractors)/t*100):null,promoters,passives,detractors};};
+const expIndex=(rows:Row[])=>{const values=rows.map(r=>{const z=[num(r,A.total),num(r,A.ambience),num(r,A.service),num(r,A.taste),num(r,A.presentation),num(r,A.comfort)];return avg([z[0]===null?null:z[0]/10,...z.slice(1).map(x=>x===null?null:x/5)]);}).filter((x):x is number=>x!==null);const v=avg(values);return v===null?null:v*100;};
+const strongReturn=(rows:Row[])=>{const a=rows.map(r=>txt(r,A.ret).toLowerCase()).filter(Boolean);return a.length?a.filter(x=>x.includes('обов')).length/a.length*100:null;};
+const positiveReturn=(rows:Row[])=>{const a=rows.map(r=>txt(r,A.ret).toLowerCase()).filter(Boolean);return a.length?a.filter(x=>x.includes('обов')||x.includes('скоріш')).length/a.length*100:null;};
+const wowRate=(rows:Row[])=>{const a=rows.map(r=>txt(r,A.comment).toLowerCase()).filter(x=>x.includes('оцінка ціна/якість'));return a.length?a.filter(x=>x.includes('дуже вигідно')).length/a.length*100:null;};
+const presetRange=(p:Preset,anchor:Date,min:Date,custom:Range)=>p==='all'?clamp({start:min,end:anchor}):p==='day'?clamp({start:anchor,end:anchor}):p==='week'?clamp({start:sow(anchor),end:anchor}):p==='month'?clamp({start:som(anchor),end:anchor}):p==='30d'?clamp({start:add(anchor,-29),end:anchor}):clamp(custom);
+const previousRange=(p:Preset,r:Range,anchor:Date)=>{if(p==='day')return clamp({start:add(anchor,-1),end:add(anchor,-1)});if(p==='week')return clamp({start:add(r.start,-7),end:add(r.end,-7)});if(p==='month'){const elapsed=Math.floor((sod(anchor).getTime()-som(anchor).getTime())/DAY),start=new Date(anchor.getFullYear(),anchor.getMonth()-1,1),last=new Date(anchor.getFullYear(),anchor.getMonth(),0),end=add(start,elapsed);return clamp({start,end:end>last?last:end});}const duration=eod(r.end).getTime()-sod(r.start).getTime()+1,end=new Date(sod(r.start).getTime()-1);return{start:new Date(end.getTime()-duration+1),end};};
+const groupKey=(d:Date,g:Grain)=>g==='day'?iso(sod(d)):g==='week'?iso(sow(d)):`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+const groupLabel=(k:string,g:Grain)=>{const d=date(k);return !d?k:g==='day'?fd(d,{day:'2-digit',month:'2-digit'}):g==='week'?`з ${fd(d,{day:'2-digit',month:'2-digit'})}`:fd(d,{month:'short',year:'2-digit'});};
+const dishCats=(raw:string)=>{const s=norm(raw),out:string[]=[];const addCat=(v:string)=>!out.includes(v)&&out.push(v);if((s.includes('стейк')||s.includes('steak'))&&s.includes('боул'))addCat('Стейк-боул');if(s.includes('бургер'))addCat('Бургер');if(s.includes('тако')||s.includes('такос')||s.includes('🌮'))addCat('Тако');if(s.includes('мелт'))addCat('Мелт');if(s.includes('удон'))addCat('Удон');if(s.includes('суп')||s.includes('колаген'))addCat('Колагеновий суп');if(s.includes('салат'))addCat('Салат');if(s.includes('боул')&&!out.includes('Стейк-боул'))addCat('Боул');if(s.includes('стейк')&&!out.includes('Стейк-боул')&&!s.includes('тако'))addCat('Стейк');if(!out.length&&raw&&norm(raw)!=='кайф')addCat(raw.length>34?`${raw.slice(0,34)}…`:raw);return out;};
+const themes=(rows:Row[],dishes:Row[],tone:'positive'|'negative'):Theme[]=>{const rules=tone==='positive'?POS:NEG,map=new Map<string,{count:number;samples:string[];critical:number}>();rows.forEach(r=>{const source=(tone==='positive'?[txt(r,A.ambienceText),txt(r,A.staff),txt(r,A.comment)]:[txt(r,A.hall),txt(r,A.serviceText),txt(r,A.discomfort),txt(r,A.critical)]).filter(Boolean).join(' • '),n=norm(source);if(!n)return;rules.forEach(([key,,words])=>{if(!words.some(w=>n.includes(norm(w))))return;const x=map.get(key)||{count:0,samples:[],critical:0};x.count++;if(source&&!x.samples.includes(source)&&x.samples.length<4)x.samples.push(source);if(tone==='negative'&&txt(r,A.critical))x.critical++;map.set(key,x);});});if(tone==='negative')dishes.forEach(r=>{const source=txt(r,A.dishComment),n=norm(source);rules.forEach(([key,,words])=>{if(!source||!words.some(w=>n.includes(norm(w))))return;const x=map.get(key)||{count:0,samples:[],critical:0};x.count++;if(!x.samples.includes(source)&&x.samples.length<4)x.samples.push(source);map.set(key,x);});});return rules.map(([key,label])=>{const x=map.get(key)||{count:0,samples:[],critical:0};return{key,label,count:x.count,samples:x.samples,tone,priority:x.count*10+x.critical*6};}).filter(x=>x.count).sort((a,b)=>b.priority-a.priority);};
+const csv=(rows:Row[])=>{if(!rows.length)return'';const h=Array.from(new Set(rows.flatMap(Object.keys))),e=(v:unknown)=>`"${String(v??'').replace(/"/g,'""')}"`;return[h.map(e).join(','),...rows.map(r=>h.map(k=>e(r[k])).join(','))].join('\n');};
+const download=(name:string,content:string)=>{const blob=new Blob([`\uFEFF${content}`],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);};
 
-  // --- ФІЛЬТРАЦІЯ ЗА ЧАСОМ ---
-  const filteredGeneral = general.filter(row => {
-    const d = new Date(row.Timestamp);
-    const now = new Date();
-    if (timeFilter === 'today') return d.toDateString() === now.toDateString();
-    if (timeFilter === 'week') return (now.getTime() - d.getTime()) <= 7 * 24 * 60 * 60 * 1000;
-    if (timeFilter === 'month') return (now.getTime() - d.getTime()) <= 30 * 24 * 60 * 60 * 1000;
-    return true;
-  });
+function Delta({current,previous}:{current:number|null;previous:number|null}){if(current===null||previous===null)return <span className="text-[11px] text-white/30">без бази</span>;const d=current-previous,ok=d>=0,Icon=d>=0?ArrowUpRight:ArrowDownRight;return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${ok?'bg-emerald-300/10 text-emerald-200':'bg-rose-300/10 text-rose-200'}`}><Icon className="h-3 w-3"/>{d>0?'+':''}{fmt(d,Math.abs(d)<10?1:0)}</span>}
+function Kpi({label,value,unit,note,icon:Icon,current,previous,onClick,active}:{label:string;value:string;unit?:string;note:string;icon:React.ElementType;current:number|null;previous:number|null;onClick?:()=>void;active?:boolean}){return <button onClick={onClick} className={`group rounded-[26px] border p-5 text-left transition hover:-translate-y-0.5 ${active?'border-[#CFF3F2]/60 bg-[#741631]':'border-[#8A314D]/45 bg-[#591027]/85 hover:border-[#CFF3F2]/30'}`}><div className="flex justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-[#CBB5BD]">{label}</p><div className="mt-3 flex items-end gap-2"><span className="text-4xl font-black tracking-[-.045em] text-[#CFF3F2]">{value}</span>{unit&&<span className="pb-1 text-sm text-white/40">{unit}</span>}</div></div><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#CFF3F2]/10 text-[#CFF3F2]"><Icon className="h-5 w-5"/></div></div><div className="mt-4 flex min-h-10 items-end justify-between gap-2 border-t border-white/8 pt-3"><p className="max-w-[66%] text-xs text-white/45">{note}</p><Delta current={current} previous={previous}/></div></button>}
+function Title({eyebrow,title,subtitle,icon:Icon}:{eyebrow:string;title:string;subtitle:string;icon:React.ElementType}){return <div className="flex gap-3"><div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#9B4661]/45 bg-[#741631]/75 text-[#CFF3F2]"><Icon className="h-5 w-5"/></div><div><p className="text-[10px] font-bold uppercase tracking-[.28em] text-[#CBB5BD]">{eyebrow}</p><h2 className="mt-1 text-2xl font-black md:text-3xl">{title}</h2><p className="mt-1 max-w-3xl text-sm text-white/50">{subtitle}</p></div></div>}
+function Empty({title,body}:{title:string;body:string}){return <div className="flex min-h-52 flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-black/10 p-8 text-center"><Sparkles className="mb-3 h-7 w-7 text-[#CFF3F2]/55"/><b>{title}</b><p className="mt-1 text-sm text-white/40">{body}</p></div>}
+function Tip({active,payload,label}:any){if(!active||!payload?.length)return null;return <div className="rounded-2xl border border-[#99516A]/50 bg-[#2A0610]/95 px-4 py-3"><p className="mb-2 text-[11px] uppercase text-white/40">{label}</p>{payload.map((x:any)=><div key={x.dataKey} className="flex justify-between gap-8 text-sm"><span>{x.name}</span><b>{fmt(x.value,x.dataKey==='responses'?0:1)}</b></div>)}</div>}
 
-  const totalGuests = filteredGeneral.length || 28; // Заглушка, якщо база ще пуста
+export default function Dashboard(){
+  const [raw,setRaw]=useState<{general:Row[];dishes:Row[]}>({general:[],dishes:[]}),[loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false),[error,setError]=useState(''),[updated,setUpdated]=useState<Date|null>(null);
+  const [preset,setPreset]=useState<Preset>('all'),[grain,setGrain]=useState<Grain>('day'),[metric,setMetric]=useState<Metric>('experience'),[gender,setGender]=useState('all'),[age,setAge]=useState('all'),[nf,setNf]=useState<NpsFilter>('all'),[filtersOpen,setFiltersOpen]=useState(false);
+  const [customStart,setCustomStart]=useState(''),[customEnd,setCustomEnd]=useState(''),[theme,setTheme]=useState<Theme|null>(null),[row,setRow]=useState<Row|null>(null),[tab,setTab]=useState<'general'|'dishes'>('general'),[search,setSearch]=useState(''),[page,setPage]=useState(0);
+  const load=useCallback(async(silent=false)=>{silent?setRefreshing(true):setLoading(true);setError('');try{const r=await fetch(`${SCRIPT_URL}${SCRIPT_URL.includes('?')?'&':'?'}_=${Date.now()}`,{cache:'no-store'});if(!r.ok)throw Error(`HTTP ${r.status}`);const j=await r.json();setRaw({general:Array.isArray(j?.general)?j.general:[],dishes:Array.isArray(j?.dishes)?j.dishes:[]});setUpdated(new Date());}catch(e){console.error(e);setError('Не вдалося завантажити General і Dishes. Перевірте Apps Script.');}finally{setLoading(false);setRefreshing(false);}},[]);
+  useEffect(()=>{load();},[load]);
+  const dates=useMemo(()=>raw.general.map(r=>date(pick(r,A.date))).filter((d):d is Date=>!!d),[raw.general]),min=useMemo(()=>dates.length?new Date(Math.min(...dates.map(d=>d.getTime()))):sod(new Date()),[dates]),max=useMemo(()=>dates.length?new Date(Math.max(...dates.map(d=>d.getTime()))):sod(new Date()),[dates]);
+  useEffect(()=>{if(!customStart)setCustomStart(iso(min));if(!customEnd)setCustomEnd(iso(max));},[min,max,customStart,customEnd]);
+  const custom=useMemo(()=>{const a=date(customStart)||min,b=date(customEnd)||max;return a<=b?{start:a,end:b}:{start:b,end:a};},[customStart,customEnd,min,max]),range=useMemo(()=>presetRange(preset,max,min,custom),[preset,max,min,custom]),prevRange=useMemo(()=>previousRange(preset,range,max),[preset,range,max]);
+  const dims=useCallback((r:Row)=>(gender==='all'||txt(r,A.gender)===gender)&&(age==='all'||txt(r,A.age)===age)&&(nf==='all'||npsClass(r)===nf),[gender,age,nf]);
+  const general=useMemo(()=>raw.general.filter(r=>inRange(date(pick(r,A.date)),range)&&dims(r)),[raw.general,range,dims]),previous=useMemo(()=>raw.general.filter(r=>inRange(date(pick(r,A.date)),prevRange)&&dims(r)),[raw.general,prevRange,dims]);
+  const ids=useMemo(()=>new Set(general.map(r=>txt(r,A.id)).filter(Boolean)),[general]),prevIds=useMemo(()=>new Set(previous.map(r=>txt(r,A.id)).filter(Boolean)),[previous]);
+  const dishes=useMemo(()=>raw.dishes.filter(r=>ids.has(txt(r,A.dishId))||inRange(date(pick(r,A.date)),range)),[raw.dishes,ids,range]),prevDishes=useMemo(()=>raw.dishes.filter(r=>prevIds.has(txt(r,A.dishId))||inRange(date(pick(r,A.date)),prevRange)),[raw.dishes,prevIds,prevRange]);
+  const nps=useMemo(()=>calcNps(general),[general]),pnps=useMemo(()=>calcNps(previous),[previous]);
+  const metrics=(rows:Row[])=>({responses:rows.length,experience:expIndex(rows),nps:calcNps(rows).score,total:avg(rows.map(r=>num(r,A.total))),service:avg(rows.map(r=>num(r,A.service))),ambience:avg(rows.map(r=>num(r,A.ambience))),taste:avg(rows.map(r=>num(r,A.taste))),presentation:avg(rows.map(r=>num(r,A.presentation))),comfort:avg(rows.map(r=>num(r,A.comfort))),return:strongReturn(rows),positive:positiveReturn(rows),wow:wowRate(rows)}),m=useMemo(()=>metrics(general),[general]),pm=useMemo(()=>metrics(previous),[previous]);
+  const trend=useMemo(()=>{const map=new Map<string,Row[]>();general.forEach(r=>{const d=date(pick(r,A.date));if(!d)return;const k=groupKey(d,grain);map.set(k,[...(map.get(k)||[]),r]);});return Array.from(map.entries()).sort(([a],[b])=>a.localeCompare(b)).map(([k,rows])=>({label:groupLabel(k,grain),responses:rows.length,nps:calcNps(rows).score,experience:expIndex(rows),service:avg(rows.map(r=>num(r,A.service))),taste:avg(rows.map(r=>num(r,A.taste))),return:strongReturn(rows)}));},[general,grain]);
+  const radar=[['Загальна',(m.total||0)*10,(pm.total||0)*10],['Атмосфера',(m.ambience||0)*20,(pm.ambience||0)*20],['Сервіс',(m.service||0)*20,(pm.service||0)*20],['Смак',(m.taste||0)*20,(pm.taste||0)*20],['Подача',(m.presentation||0)*20,(pm.presentation||0)*20],['Комфорт',(m.comfort||0)*20,(pm.comfort||0)*20]].map(([name,current,prev])=>({name,current,prev}));
+  const dishStats=useMemo(()=>{const map=new Map<string,{mentions:number;ratings:number[];comments:string[]}>();dishes.forEach(r=>dishCats(txt(r,A.dishName)).forEach(name=>{const x=map.get(name)||{mentions:0,ratings:[],comments:[]};x.mentions++;const rating=num(r,A.dishRating),comment=txt(r,A.dishComment);if(rating!==null)x.ratings.push(rating);if(comment&&!x.comments.includes(comment))x.comments.push(comment);map.set(name,x);}));return Array.from(map.entries()).map(([name,x])=>({name,mentions:x.mentions,rating:avg(x.ratings),comments:x.comments})).sort((a,b)=>b.mentions-a.mentions||(b.rating||0)-(a.rating||0));},[dishes]);
+  const pos=useMemo(()=>themes(general,dishes,'positive'),[general,dishes]),neg=useMemo(()=>themes(general,dishes,'negative'),[general,dishes]);
+  const genders=useMemo(()=>Array.from(new Set(raw.general.map(r=>txt(r,A.gender)).filter(Boolean))).sort(),[raw.general]),ages=useMemo(()=>Array.from(new Set(raw.general.map(r=>txt(r,A.age)).filter(Boolean))).sort(),[raw.general]);
+  const genderData=useMemo(()=>{const x=new Map<string,number>();general.forEach(r=>{const k=txt(r,A.gender)||'Не вказано';x.set(k,(x.get(k)||0)+1);});return Array.from(x,([name,value])=>({name,value}));},[general]),ageData=useMemo(()=>{const x=new Map<string,number>();general.forEach(r=>{const k=txt(r,A.age)||'Не вказано';x.set(k,(x.get(k)||0)+1);});return Array.from(x,([name,value])=>({name,value}));},[general]);
+  const source=tab==='general'?general:dishes,found=useMemo(()=>{const q=norm(search);return q?source.filter(r=>norm(Object.values(r).join(' ')).includes(q)):source;},[source,search]),pages=Math.max(1,Math.ceil(found.length/10)),shown=found.slice(page*10,page*10+10);
+  useEffect(()=>setPage(0),[tab,search,preset,gender,age,nf]);
+  const metricDef=METRICS.find(x=>x.key===metric)!,hasFilters=gender!=='all'||age!=='all'||nf!=='all';
 
-  // --- ОБЧИСЛЕННЯ NPS (Індекс лояльності) ---
-  let promoters = 0;
-  let detractors = 0;
-  let passives = 0;
+  if(loading)return <div className="flex min-h-screen flex-col items-center justify-center bg-[#310611] text-[#F6EFE8]"><Loader2 className="h-12 w-12 animate-spin text-[#CFF3F2]"/><p className="mt-5 text-xs font-bold uppercase tracking-[.28em] text-white/55">Завантаження MARMOO BI</p></div>;
+  if(error&&!raw.general.length)return <div className="flex min-h-screen items-center justify-center bg-[#310611] p-6 text-white"><div className="max-w-lg rounded-[30px] border border-rose-300/20 bg-[#5B0B25] p-8 text-center"><AlertTriangle className="mx-auto h-10 w-10 text-rose-200"/><h1 className="mt-4 text-2xl font-black">Дані не завантажились</h1><p className="mt-2 text-white/55">{error}</p><button onClick={()=>load()} className="mt-6 rounded-xl bg-[#CFF3F2] px-5 py-3 font-bold text-[#4A0E17]">Повторити</button></div></div>;
 
-  filteredGeneral.forEach(r => {
-    const score = Number(r["NPS Score (q16)"] || 10);
-    if (score >= 9) promoters++;
-    else if (score <= 6) detractors++;
-    else passives++;
-  });
+  return <div className="min-h-screen bg-[#310611] text-[#F6EFE8] selection:bg-[#CFF3F2] selection:text-[#4A0E17]">
+    <div className="pointer-events-none fixed inset-0 overflow-hidden"><div className="absolute -left-40 top-24 h-[520px] w-[520px] rounded-full bg-[#9A214A]/20 blur-[120px]"/><div className="absolute right-[-220px] top-[-100px] h-[700px] w-[700px] rounded-full bg-[#7B1C3A]/25 blur-[150px]"/></div>
+    <header className="sticky top-0 z-40 border-b border-white/8 bg-[#310611]/90 backdrop-blur-2xl"><div className="mx-auto max-w-[1680px] px-4 py-4 md:px-8"><div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#A95770]/35 bg-[#5B0B25] text-[#CFF3F2]"><LayoutDashboard className="h-6 w-6"/></div><div><div className="flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-300"/><p className="text-[10px] font-bold uppercase tracking-[.3em] text-[#CBB5BD]">Live analytical platform</p></div><h1 className="mt-1 text-xl font-black md:text-2xl">MARMOO EXPERIENCE BI</h1></div></div><div className="flex flex-wrap gap-2">{([['all','Весь період'],['day','День'],['week','Тиждень'],['month','Місяць'],['30d','30 днів']] as [Preset,string][]).map(([v,l])=><button key={v} onClick={()=>setPreset(v)} className={`rounded-xl px-3.5 py-2 text-xs font-bold ${preset===v?'bg-[#CFF3F2] text-[#4A0E17]':'border border-white/8 bg-white/[.035] text-white/55'}`}>{l}</button>)}<button onClick={()=>{setPreset('custom');setFiltersOpen(true);}} className={`rounded-xl px-3.5 py-2 text-xs font-bold ${preset==='custom'?'bg-[#CFF3F2] text-[#4A0E17]':'border border-white/8 text-white/55'}`}>Свій період</button><button onClick={()=>setFiltersOpen(v=>!v)} className={`relative flex h-9 w-9 items-center justify-center rounded-xl border ${filtersOpen||hasFilters?'border-[#CFF3F2]/40 bg-[#CFF3F2]/10 text-[#CFF3F2]':'border-white/8 text-white/55'}`}><Filter className="h-4 w-4"/>{hasFilters&&<span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#F3C969]"/>}</button><button onClick={()=>load(true)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/8 text-white/55"><RefreshCw className={`h-4 w-4 ${refreshing?'animate-spin':''}`}/></button><button onClick={()=>download(`marmoo-general-${iso(range.start)}-${iso(range.end)}.csv`,csv(general))} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/8 text-white/55"><Download className="h-4 w-4"/></button></div></div>
+      {filtersOpen&&<div className="mt-4 grid gap-3 rounded-2xl border border-white/8 bg-black/15 p-4 md:grid-cols-2 xl:grid-cols-5"><label><span className="text-[10px] uppercase tracking-[.18em] text-white/40">Початок</span><input type="date" value={customStart} onChange={e=>{setCustomStart(e.target.value);setPreset('custom');}} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#3D0A18] px-3 py-2 text-sm"/></label><label><span className="text-[10px] uppercase tracking-[.18em] text-white/40">Кінець</span><input type="date" value={customEnd} onChange={e=>{setCustomEnd(e.target.value);setPreset('custom');}} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#3D0A18] px-3 py-2 text-sm"/></label><label><span className="text-[10px] uppercase tracking-[.18em] text-white/40">Стать</span><select value={gender} onChange={e=>setGender(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#3D0A18] px-3 py-2 text-sm"><option value="all">Усі</option>{genders.map(v=><option key={v}>{v}</option>)}</select></label><label><span className="text-[10px] uppercase tracking-[.18em] text-white/40">Вік</span><select value={age} onChange={e=>setAge(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#3D0A18] px-3 py-2 text-sm"><option value="all">Усі</option>{ages.map(v=><option key={v}>{v}</option>)}</select></label><label><span className="text-[10px] uppercase tracking-[.18em] text-white/40">NPS-сегмент</span><div className="mt-1.5 flex gap-2"><select value={nf} onChange={e=>setNf(e.target.value as NpsFilter)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#3D0A18] px-3 py-2 text-sm"><option value="all">Усі</option><option value="promoter">Промоутери</option><option value="passive">Пасивні</option><option value="detractor">Критики</option></select>{hasFilters&&<button onClick={()=>{setGender('all');setAge('all');setNf('all');}} className="rounded-xl border border-white/10 px-3"><X className="h-4 w-4"/></button>}</div></label></div>}
+    </div></header>
 
-  // Якщо даних обмаль, використовуємо еталонні пропорції зі слайду
-  if (filteredGeneral.length === 0) {
-    promoters = 24;
-    passives = 3;
-    detractors = 1;
-  }
-  const npsScore = Math.round(((promoters - detractors) / (promoters + passives + detractors)) * 100);
+    <main className="relative mx-auto max-w-[1680px] space-y-12 px-4 py-8 md:px-8">
+      <section><div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="flex flex-wrap gap-2 text-xs text-white/45"><span className="rounded-full border border-white/8 px-3 py-1.5">{fd(range.start)} — {fd(range.end)}</span><span className="py-1.5">vs {fd(prevRange.start)} — {fd(prevRange.end)}</span></div><h2 className="mt-4 max-w-5xl text-3xl font-black leading-tight tracking-[-.04em] md:text-5xl">Від відгуку до рішення — <span className="text-[#CFF3F2]">в одному кліку</span></h2><p className="mt-3 max-w-3xl text-sm text-white/50 md:text-base">Живий BI читає лише General і Dishes, порівнює періоди, нормалізує страви та перетворює відкриті коментарі на пріоритети.</p></div><div className="flex gap-3 text-xs"><div className="rounded-2xl border border-white/8 px-4 py-3"><span className="block text-[10px] uppercase text-white/30">Остання відповідь</span><b className="mt-1 block">{fd(max)}</b></div><div className="rounded-2xl border border-white/8 px-4 py-3"><span className="block text-[10px] uppercase text-white/30">Оновлено</span><b className="mt-1 block">{updated?.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'})||'—'}</b></div></div></div>
+        <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-5"><Kpi label="Відповіді" value={String(m.responses)} note="Обсяг вибірки" icon={MessageSquareText} current={m.responses} previous={pm.responses} onClick={()=>setMetric('responses')} active={metric==='responses'}/><Kpi label="Experience Index" value={fmt(m.experience,1)} unit="/100" note="6 ключових оцінок" icon={Gauge} current={m.experience} previous={pm.experience} onClick={()=>setMetric('experience')} active={metric==='experience'}/><Kpi label="NPS" value={m.nps===null?'—':`${m.nps>0?'+':''}${m.nps}`} note="Промоутери мінус критики" icon={Heart} current={m.nps} previous={pm.nps} onClick={()=>setMetric('nps')} active={metric==='nps'}/><Kpi label="Точно повернуться" value={fmt(m.return,0)} unit="%" note={`Позитивний намір: ${fmt(m.positive,0)}%`} icon={Target} current={m.return} previous={pm.return} onClick={()=>setMetric('return')} active={metric==='return'}/><Kpi label="Середня оцінка" value={fmt(m.total,1)} unit="/10" note={`«Дуже вигідно»: ${fmt(m.wow,0)}%`} icon={Star} current={m.total} previous={pm.total}/></div>
+      </section>
 
-  // --- СЕРЕДНІ ОЦІНКИ ---
-  const avgService = (filteredGeneral.reduce((acc, r) => acc + Number(r["Service Rating (q5)"] || 4.96), 0) / totalGuests).toFixed(2);
-  const avgAmbience = (filteredGeneral.reduce((acc, r) => acc + Number(r["Ambience Rating (q2)"] || 4.93), 0) / totalGuests).toFixed(2);
-  const avgTaste = (filteredGeneral.reduce((acc, r) => acc + Number(r["Food Taste (q8)"] || 4.86), 0) / totalGuests).toFixed(2);
+      <section className="space-y-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><Title eyebrow="01 • Динаміка" title="Що відбувається з досвідом" subtitle="Клікніть на KPI або метрику; змініть деталізацію на день, тиждень чи місяць." icon={TrendingUp}/><div className="flex gap-2">{(['day','week','month'] as Grain[]).map(v=><button key={v} onClick={()=>setGrain(v)} className={`rounded-xl px-3 py-2 text-xs font-bold ${grain===v?'bg-[#CFF3F2] text-[#4A0E17]':'border border-white/8 text-white/50'}`}>{v==='day'?'По днях':v==='week'?'По тижнях':'По місяцях'}</button>)}</div></div><div className="grid gap-5 xl:grid-cols-[1.65fr_.85fr]"><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><div className="flex flex-col gap-3 md:flex-row md:justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Обрана метрика</p><h3 className="mt-1 text-2xl font-black">{metricDef.label}</h3></div><div className="flex flex-wrap gap-1.5">{METRICS.map(x=><button key={x.key} onClick={()=>setMetric(x.key)} className={`rounded-lg px-2.5 py-1.5 text-[11px] ${metric===x.key?'bg-white/12 text-white':'text-white/35'}`}>{x.label}</button>)}</div></div><div className="mt-5 h-[350px]">{trend.length?<ResponsiveContainer width="100%" height="100%"><AreaChart data={trend} margin={{top:15,right:8,left:-12}}><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={metricDef.color} stopOpacity={.42}/><stop offset="1" stopColor={metricDef.color} stopOpacity={.02}/></linearGradient></defs><CartesianGrid stroke={C.grid} strokeOpacity={.35} vertical={false}/><XAxis dataKey="label" tick={{fill:C.muted,fontSize:11}} axisLine={false} tickLine={false}/><YAxis domain={metricDef.domain||['auto','auto']} tick={{fill:C.muted,fontSize:11}} axisLine={false} tickLine={false}/><Tooltip content={<Tip/>}/><Area type="monotone" dataKey={metric} name={metricDef.label} stroke={metricDef.color} strokeWidth={3} fill="url(#g)" connectNulls dot={{r:4,fill:metricDef.color}}/></AreaChart></ResponsiveContainer>:<Empty title="Немає точок" body="Розширте період або скиньте фільтри."/>}</div></div><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Поточний vs попередній</p><h3 className="mt-1 text-xl font-black">Карта досвіду</h3><div className="h-[330px]">{general.length?<ResponsiveContainer width="100%" height="100%"><RadarChart data={radar} outerRadius="72%"><PolarGrid stroke={C.grid}/><PolarAngleAxis dataKey="name" tick={{fill:'#E7DDE0',fontSize:11}}/><Radar name="Поточний" dataKey="current" stroke={C.cyan2} fill={C.cyan2} fillOpacity={.22}/><Radar name="Попередній" dataKey="prev" stroke={C.gold} fill={C.gold} fillOpacity={.05} strokeDasharray="5 5"/><Legend wrapperStyle={{fontSize:11}}/><Tooltip/></RadarChart></ResponsiveContainer>:<Empty title="Немає оцінок" body="Для карти потрібні числові поля General."/>}</div></div></div></section>
 
-  // --- АНАЛІТИКА СТРАВ ---
-  const dishCounts: Record<string, { count: number, scoreSum: number }> = {};
-  dishes.forEach(d => {
-    const name = d["Dish Name"]?.trim();
-    if (!name) return;
-    if (!dishCounts[name]) dishCounts[name] = { count: 0, scoreSum: 0 };
-    dishCounts[name].count++;
-    dishCounts[name].scoreSum += Number(d["Dish Rating"] || 9.2);
-  });
+      <section className="space-y-6"><Title eyebrow="02 • Лояльність" title="NPS і повторний візит" subtitle="Емоційна любов до бренду та конкретне зобов’язання повернутися — різні сигнали." icon={Heart}/><div className="grid gap-5 xl:grid-cols-[.72fr_1fr_1.2fr]"><div className="rounded-[30px] bg-[#F6EFE8] p-7 text-[#4A0E17]"><p className="text-[10px] font-black uppercase tracking-[.24em] opacity-55">Net Promoter Score</p><div className="mt-4 text-7xl font-black tracking-[-.08em]">{nps.score===null?'—':`${nps.score>0?'+':''}${nps.score}`}</div><p className="mt-3 text-sm font-bold">{(nps.score||0)>=70?'Сильна любов до бренду':'Позитивна база лояльності'}</p><div className="mt-7 border-t border-[#4A0E17]/10 pt-4"><Delta current={nps.score} previous={pnps.score}/><p className="mt-3 text-xs opacity-60">Розрахунок тільки з реальних q16, без заглушок.</p></div></div><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Структура NPS</p><h3 className="mt-1 text-xl font-black">Хто формує індекс</h3><div className="h-[220px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{name:'Промоутери',value:nps.promoters,color:C.cyan2},{name:'Пасивні',value:nps.passives,color:C.gold},{name:'Критики',value:nps.detractors,color:C.rose}]} dataKey="value" innerRadius={58} outerRadius={88} paddingAngle={4} stroke="none">{[C.cyan2,C.gold,C.rose].map(x=><Cell key={x} fill={x}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer></div><div className="grid grid-cols-3 gap-2">{[['Промоутери',nps.promoters,'promoter'],['Пасивні',nps.passives,'passive'],['Критики',nps.detractors,'detractor']].map(([l,v,f])=><button key={String(l)} onClick={()=>setNf(f as NpsFilter)} className="rounded-2xl bg-black/15 p-3 text-center"><b className="block text-xl">{v}</b><span className="text-[10px] text-white/40">{l}</span></button>)}</div></div><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Поведінковий намір</p><h3 className="mt-1 text-xl font-black">Повернення гостей</h3></div><b className="text-3xl text-[#CFF3F2]">{fmt(m.return,0)}%</b></div><div className="mt-5 h-[250px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={Array.from(general.reduce((x,r)=>{const k=txt(r,A.ret)||'Без відповіді';x.set(k,(x.get(k)||0)+1);return x;},new Map<string,number>()),([name,value])=>({name,value}))} layout="vertical"><CartesianGrid stroke={C.grid} strokeOpacity={.3} horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={120} tick={{fill:C.muted,fontSize:11}}/><Tooltip/><Bar dataKey="value" fill={C.cyan2} radius={[0,10,10,0]} barSize={22}/></BarChart></ResponsiveContainer></div><p className="rounded-2xl bg-[#CFF3F2]/[.045] p-4 text-sm text-white/55"><b className="text-[#CFF3F2]">Фокус:</b> частка «обов’язково» — головна метрика повторного візиту.</p></div></div></section>
 
-  let topDishes = Object.keys(dishCounts).map(name => ({
-    name,
-    count: dishCounts[name].count,
-    rating: (dishCounts[name].scoreSum / dishCounts[name].count).toFixed(1)
-  })).sort((a, b) => b.count - a.count).slice(0, 4);
+      <section className="space-y-6"><Title eyebrow="03 • Кухня" title="Dish Intelligence" subtitle="Вільні назви страв групуються у категорії; сирі записи лишаються доступними в Data Explorer." icon={UtensilsCrossed}/><div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]"><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Попит × якість</p><h3 className="mt-1 text-xl font-black">Топ категорій</h3></div><div className="text-right"><span className="text-[10px] uppercase text-white/35">Середня оцінка</span><b className="block text-2xl text-[#CFF3F2]">{fmt(avg(dishes.map(r=>num(r,A.dishRating))),1)}/10</b></div></div><div className="mt-5 space-y-3">{dishStats.length?dishStats.slice(0,8).map((d,i)=>{const maxM=Math.max(...dishStats.map(x=>x.mentions),1);return <button key={d.name} onClick={()=>setTheme({key:d.name,label:d.name,count:d.mentions,samples:d.comments.length?d.comments:['Без коментаря'],tone:'positive',priority:d.mentions})} className="grid w-full grid-cols-[32px_minmax(0,1fr)_70px] items-center gap-3 rounded-2xl bg-black/12 p-3 text-left hover:bg-black/22"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#CFF3F2] text-xs font-black text-[#4A0E17]">{i+1}</span><div><div className="flex justify-between gap-3"><b className="truncate text-sm">{d.name}</b><span className="text-[10px] text-white/30">{d.mentions} зг.</span></div><div className="mt-2 h-1.5 rounded-full bg-white/5"><div className="h-full rounded-full bg-[#8DE0DE]" style={{width:`${d.mentions/maxM*100}%`}}/></div></div><b className="text-right text-sm text-[#CFF3F2]">{fmt(d.rating,1)}</b></button>}):<Empty title="Dishes порожній" body="Немає записів у вибраному періоді."/>}</div></div><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Kitchen watchlist</p><h3 className="mt-1 text-xl font-black">Що тягне вниз</h3></div><ShieldAlert className="h-5 w-5 text-[#F08AA5]"/></div><div className="mt-5 space-y-3">{dishStats.filter(x=>x.rating!==null).sort((a,b)=>(a.rating||10)-(b.rating||10)).slice(0,5).map(d=><button key={d.name} onClick={()=>setTheme({key:d.name,label:d.name,count:d.mentions,samples:d.comments.length?d.comments:['Без коментаря'],tone:'negative',priority:d.mentions})} className="flex w-full justify-between rounded-2xl border border-white/7 bg-black/15 p-4 text-left"><div><b className="text-sm">{d.name}</b><p className="mt-1 text-xs text-white/35">{d.mentions} згадок • {d.comments.length} ком.</p></div><b className={`rounded-xl px-3 py-2 ${(d.rating||10)<8?'bg-rose-300/10 text-rose-200':'bg-[#CFF3F2]/10 text-[#CFF3F2]'}`}>{fmt(d.rating,1)}</b></button>)}</div><div className="mt-5 rounded-2xl bg-[#CFF3F2] p-5 text-sm font-bold text-[#4A0E17]">Пріоритет — страви з високою частотою згадок і повторюваними зауваженнями, а не лише низькою середньою.</div></div></div></section>
 
-  if (topDishes.length === 0) {
-    topDishes = [
-      { name: "Стейк-боул", count: 10, rating: "9.3" },
-      { name: "Бургер", count: 5, rating: "9.2" },
-      { name: "Тако", count: 5, rating: "7.8" },
-      { name: "Боул", count: 4, rating: "9.0" }
-    ];
-  }
+      <section className="space-y-6"><Title eyebrow="04 • Voice of Guest" title="Що люблять і що виправляти" subtitle="Автоматичний тематичний аналіз відкритих полів General і Dish Comment." icon={MessageSquareText}/><div className="grid gap-5 xl:grid-cols-2"><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Love drivers</p><h3 className="mt-1 text-xl font-black">Що створює вау</h3></div><CheckCircle2 className="h-5 w-5 text-emerald-200"/></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{pos.slice(0,8).map(t=><button key={t.key} onClick={()=>setTheme(t)} className="rounded-2xl border border-white/7 bg-black/12 p-4 text-left hover:bg-black/22"><div className="flex justify-between"><b className="text-sm">{t.label}</b><span className="rounded-lg bg-emerald-300/10 px-2 py-1 text-xs font-black text-emerald-200">{t.count}</span></div><p className="mt-3 line-clamp-2 text-xs text-white/35">{t.samples[0]}</p><ChevronRight className="mt-3 h-4 w-4 text-white/20"/></button>)}</div></div><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Action radar</p><h3 className="mt-1 text-xl font-black">Пріоритети покращення</h3></div><AlertTriangle className="h-5 w-5 text-[#F3C969]"/></div><div className="mt-5 space-y-3">{neg.slice(0,7).map((t,i)=>{const maxP=Math.max(...neg.map(x=>x.priority),1);return <button key={t.key} onClick={()=>setTheme(t)} className="w-full rounded-2xl border border-white/7 bg-black/12 p-4 text-left hover:bg-black/22"><div className="flex items-center gap-3"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F3C969]/10 text-xs font-black text-[#F3C969]">{i+1}</span><b className="flex-1 text-sm">{t.label}</b><span className="text-xs font-black text-[#F3C969]">{t.count}</span></div><div className="mt-3 h-1.5 rounded-full bg-white/5"><div className="h-full rounded-full bg-gradient-to-r from-[#F3C969] to-[#F08AA5]" style={{width:`${t.priority/maxP*100}%`}}/></div></button>})}</div></div></div></section>
 
-  // --- АНАЛІТИКА ДЕМОГРАФІЇ ---
-  let women = 0, men = 0;
-  let ageGroups: Record<string, number> = { "18-24": 0, "25-34": 0, "35-44": 0, "55+": 0, "до 18": 0 };
+      <section className="space-y-6"><Title eyebrow="05 • Аудиторія" title="Хто залишає фідбек" subtitle="Демографія показує, чи не змінилася структура вибірки разом з оцінками." icon={Users}/><div className="grid gap-5 xl:grid-cols-3"><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Стать</p><h3 className="mt-1 text-xl font-black">Структура вибірки</h3><div className="h-[240px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={genderData} dataKey="value" innerRadius={48} outerRadius={82} paddingAngle={3} stroke="none">{genderData.map((_,i)=><Cell key={i} fill={[C.cyan2,C.rose,C.gold,C.muted][i%4]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer></div>{genderData.map((x,i)=><button key={x.name} onClick={()=>x.name!=='Не вказано'&&setGender(x.name)} className="mb-2 flex w-full justify-between rounded-xl bg-black/12 px-3 py-2 text-sm"><span>{x.name}</span><b>{x.value}</b></button>)}</div><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Вік</p><h3 className="mt-1 text-xl font-black">Вікові групи</h3><div className="mt-5 h-[310px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={ageData} margin={{left:-20}}><CartesianGrid stroke={C.grid} strokeOpacity={.3} vertical={false}/><XAxis dataKey="name" tick={{fill:C.muted,fontSize:11}}/><YAxis allowDecimals={false} tick={{fill:C.muted,fontSize:11}}/><Tooltip/><Bar dataKey="value" fill={C.cyan2} radius={[10,10,0,0]} barSize={38}/></BarChart></ResponsiveContainer></div></div><div className="rounded-[30px] border border-white/8 bg-[#4A0C20]/75 p-6"><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Data trust</p><h3 className="mt-1 text-xl font-black">Якість даних</h3></div><Activity className="h-5 w-5 text-[#CFF3F2]"/></div><div className="mt-6 space-y-5">{[['Стать',general.filter(r=>txt(r,A.gender)).length],['Вік',general.filter(r=>txt(r,A.age)).length],['Коментар',general.filter(r=>txt(r,A.comment)).length],['Страва в Dishes',Math.min(general.length,dishes.length)]].map(([l,c])=>{const v=general.length?Number(c)/general.length*100:0;return <div key={String(l)}><div className="flex justify-between text-xs"><span className="text-white/55">{l}</span><b>{fmt(v,0)}%</b></div><div className="mt-2 h-2 rounded-full bg-white/5"><div className={`h-full rounded-full ${v>=80?'bg-[#79D7B4]':v>=55?'bg-[#F3C969]':'bg-[#F08AA5]'}`} style={{width:`${Math.min(100,v)}%`}}/></div></div>})}</div></div></div></section>
 
-  filteredGeneral.forEach(r => {
-    if (String(r.Gender).toLowerCase().includes("жін")) women++;
-    if (String(r.Gender).toLowerCase().includes("чол")) men++;
-    const age = String(r.AgeGroup);
-    if (ageGroups[age] !== undefined) ageGroups[age]++;
-  });
+      <section className="space-y-6 pb-12"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><Title eyebrow="06 • Data Explorer" title="Усі дані без втрат" subtitle="Пошук і відкриття будь-якого рядка General або Dishes. Третій лист не читається." icon={BarChart3}/><div className="flex gap-2"><button onClick={()=>setTab('general')} className={`rounded-xl px-4 py-2 text-xs font-bold ${tab==='general'?'bg-[#CFF3F2] text-[#4A0E17]':'border border-white/8 text-white/50'}`}>General ({general.length})</button><button onClick={()=>setTab('dishes')} className={`rounded-xl px-4 py-2 text-xs font-bold ${tab==='dishes'?'bg-[#CFF3F2] text-[#4A0E17]':'border border-white/8 text-white/50'}`}>Dishes ({dishes.length})</button></div></div><div className="overflow-hidden rounded-[30px] border border-white/8 bg-[#4A0C20]/75"><div className="flex flex-col gap-3 border-b border-white/8 p-4 sm:flex-row sm:justify-between"><div className="relative max-w-md flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Пошук у всіх полях…" className="w-full rounded-xl border border-white/8 bg-black/15 py-2.5 pl-10 pr-4 text-sm"/></div><button onClick={()=>download(`marmoo-${tab}.csv`,csv(found))} className="inline-flex items-center gap-2 rounded-xl border border-white/8 px-3 py-2 text-xs font-bold text-white/60"><Download className="h-3.5 w-3.5"/> CSV</button></div><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-black/10 text-[10px] uppercase tracking-[.14em] text-white/30"><tr>{(tab==='general'?['Дата','ID','Загальна','NPS','Повернення','Стать','Вік','Коментар']:['Дата','Response ID','Страва','Оцінка','Коментар']).map(h=><th key={h} className="whitespace-nowrap px-5 py-3">{h}</th>)}</tr></thead><tbody className="divide-y divide-white/6">{shown.map((r,i)=>tab==='general'?<tr key={txt(r,A.id)||i} onClick={()=>setRow(r)} className="cursor-pointer hover:bg-white/[.035]"><td className="px-5 py-3">{fd(date(pick(r,A.date)),{day:'2-digit',month:'2-digit',year:'2-digit'})}</td><td className="max-w-[160px] truncate px-5 py-3 font-mono text-xs text-white/30">{txt(r,A.id)}</td><td className="px-5 py-3 font-black text-[#CFF3F2]">{fmt(num(r,A.total),0)}</td><td className="px-5 py-3 font-black">{fmt(num(r,A.nps),0)}</td><td className="whitespace-nowrap px-5 py-3 text-white/55">{txt(r,A.ret)||'—'}</td><td className="px-5 py-3 text-white/55">{txt(r,A.gender)||'—'}</td><td className="px-5 py-3 text-white/55">{txt(r,A.age)||'—'}</td><td className="max-w-[360px] truncate px-5 py-3 text-white/45">{txt(r,A.comment)||txt(r,A.critical)||'—'}</td></tr>:<tr key={`${txt(r,A.dishId)}-${i}`} onClick={()=>setRow(r)} className="cursor-pointer hover:bg-white/[.035]"><td className="px-5 py-3">{fd(date(pick(r,A.date)),{day:'2-digit',month:'2-digit',year:'2-digit'})}</td><td className="max-w-[170px] truncate px-5 py-3 font-mono text-xs text-white/30">{txt(r,A.dishId)}</td><td className="max-w-[520px] px-5 py-3 font-semibold">{txt(r,A.dishName)}</td><td className="px-5 py-3 font-black text-[#CFF3F2]">{fmt(num(r,A.dishRating),0)}/10</td><td className="max-w-[360px] truncate px-5 py-3 text-white/45">{txt(r,A.dishComment)||'—'}</td></tr>)}</tbody></table></div><div className="flex justify-between border-t border-white/8 px-5 py-4 text-xs text-white/40"><span>Сторінка {page+1} з {pages} • {found.length} рядків</span><div className="flex gap-2"><button disabled={!page} onClick={()=>setPage(p=>p-1)} className="rounded-lg border border-white/8 px-3 py-1.5 disabled:opacity-25">Назад</button><button disabled={page>=pages-1} onClick={()=>setPage(p=>p+1)} className="rounded-lg border border-white/8 px-3 py-1.5 disabled:opacity-25">Далі</button></div></div></div></section>
+    </main>
 
-  if (women === 0 && men === 0) { women = 14; men = 10; ageGroups = { "18-24": 10, "25-34": 8, "35-44": 5, "55+": 1, "до 18": 1 }; }
-
-  // --- ТЕКСТОВІ СИГНАЛИ (Очисний контент-аналіз) ---
-  const criticalFixes = filteredGeneral
-    .map(r => r["CRITICAL FIX (q14)"])
-    .filter(t => t && t.trim() !== '' && t.toLowerCase() !== 'нічого' && t.toLowerCase() !== 'все супер');
-
-  return (
-    <div className="min-h-screen bg-[#4A0E17] text-[#FFF8F2] p-6 md:p-12 font-sans selection:bg-[#E8DCC4] selection:text-[#4A0E17]">
-      
-      {/* ВЕРХНЯ ПАНЕЛЬ / HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 border-b border-[#6B1B26] pb-8">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="h-2 w-2 rounded-full bg-[#E8DCC4] animate-pulse" />
-            <h1 className="text-xs uppercase tracking-[0.4em] text-[#CBB5A1] font-bold">Аналітична Платформа</h1>
-          </div>
-          <h2 className="text-4xl font-extrabold tracking-tight uppercase text-white">MARMOO EXECUTIVE BOARD</h2>
-          <p className="text-xs text-[#CBB5A1] mt-1 tracking-wider">Період моніторингу: 06.2026–07.2026 • {totalGuests} відповідей</p>
-        </div>
-
-        {/* ТАЙМ-ФІЛЬТРИ У СТИЛІ СЛАЙДІВ */}
-        <div className="flex bg-[#5C1621] p-1 rounded-xl gap-1 border border-[#6B1B26]">
-          {(['all', 'today', 'week', 'month'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setTimeFilter(f)}
-              className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all ${
-                timeFilter === f 
-                  ? 'bg-[#E8DCC4] text-[#4A0E17] shadow-md' 
-                  : 'text-[#CBB5A1] hover:text-white'
-              }`}
-            >
-              {f === 'all' && 'Всього'}
-              {f === 'today' && 'Сьогодні'}
-              {f === 'week' && 'Тиждень'}
-              {f === 'month' && 'Місяць'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* БЛОК 1: КЛЮЧОВІ МЕТРИКИ СЕРВІСУ ТА ЗАЛУ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-[#5C1621] p-6 rounded-2xl border border-[#6B1B26] flex flex-col justify-between">
-          <p className="text-xs uppercase tracking-widest text-[#CBB5A1] font-bold mb-2">Сервіс закладу</p>
-          <h3 className="text-4xl font-black text-[#E8DCC4]">{avgService} <span className="text-sm font-light text-[#CBB5A1]">/ 5</span></h3>
-          <div className="h-1 bg-[#6B1B26] w-full my-3 rounded" />
-          <p className="text-xs text-[#FFF8F2]/70 font-light leading-relaxed">Люди — сильна сторона, операційні дрібниці треба стандартизувати.</p>
-        </div>
-        <div className="bg-[#5C1621] p-6 rounded-2xl border border-[#6B1B26] flex flex-col justify-between">
-          <p className="text-xs uppercase tracking-widest text-[#CBB5A1] font-bold mb-2">Атмосфера вайбу</p>
-          <h3 className="text-4xl font-black text-[#E8DCC4]">{avgAmbience} <span className="text-sm font-light text-[#CBB5A1]">/ 5</span></h3>
-          <div className="h-1 bg-[#6B1B26] w-full my-3 rounded" />
-          <p className="text-xs text-[#FFF8F2]/70 font-light leading-relaxed">Музика, світло та інтер'єр повністю відповідають преміальному статусу закладу.</p>
-        </div>
-        <div className="bg-[#5C1621] p-6 rounded-2xl border border-[#6B1B26] flex flex-col justify-between">
-          <p className="text-xs uppercase tracking-widest text-[#CBB5A1] font-bold mb-2">Комфорт гостей</p>
-          <h3 className="text-4xl font-black text-[#E8DCC4]">4.93 <span className="text-sm font-light text-[#CBB5A1]">/ 5</span></h3>
-          <div className="h-1 bg-[#6B1B26] w-full my-3 rounded" />
-          <p className="text-xs text-[#FFF8F2]/70 font-light leading-relaxed">Висока оцінка затишку та ергономіки меблів у головній залі.</p>
-        </div>
-      </div>
-
-      {/* БЛОК 2: КУХНЯ ТА КУЛІНАРНИЙ РЕЙТИНГ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        
-        {/* Топ страв */}
-        <div className="bg-[#3D0A11] p-6 rounded-2xl border border-[#5C1621]">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-[#CBB5A1] font-bold mb-4">Топ-страви у фідбеках</h4>
-          <div className="space-y-4">
-            {topDishes.map((dish, idx) => (
-              <div key={idx} className="flex items-center justify-between border-b border-[#5C1621] pb-3 last:border-0">
-                <div className="flex items-center gap-4">
-                  <span className="w-6 h-6 rounded-full bg-[#E8DCC4] text-[#4A0E17] flex items-center justify-center text-xs font-black">{idx + 1}</span>
-                  <span className="text-sm font-medium tracking-wide">{dish.name}</span>
-                </div>
-                <div className="flex items-center gap-6 text-xs text-[#CBB5A1]">
-                  <span>{dish.count} згадок</span>
-                  <span className="bg-[#E8DCC4] text-[#4A0E17] px-2 py-0.5 rounded font-bold">{dish.rating}/10</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Що просили покращити */}
-        <div className="bg-[#5C1621] p-6 rounded-2xl border border-[#6B1B26] flex flex-col justify-between">
-          <div>
-            <h4 className="text-xs uppercase tracking-[0.2em] text-[#CBB5A1] font-bold mb-4">Що просили покращити (Кухня)</h4>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-light">Дитяче меню</span>
-                <div className="w-1/2 bg-[#4A0E17] h-2 rounded-full overflow-hidden"><div className="bg-[#E8DCC4] h-full" style={{ width: '80%' }}></div></div>
-                <span className="font-bold text-[#E8DCC4]">6</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-light">Більше позицій / ширше меню</span>
-                <div className="w-1/2 bg-[#4A0E17] h-2 rounded-full overflow-hidden"><div className="bg-[#E8DCC4] h-full" style={{ width: '55%' }}></div></div>
-                <span className="font-bold text-[#E8DCC4]">4</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-light">Алкоголь / коктейлі / бар</span>
-                <div className="w-1/2 bg-[#4A0E17] h-2 rounded-full overflow-hidden"><div className="bg-[#E8DCC4] h-full" style={{ width: '40%' }}></div></div>
-                <span className="font-bold text-[#E8DCC4]">3</span>
-              </div>
-            </div>
-          </div>
-          <p className="text-[11px] text-[#CBB5A1] mt-4 italic font-light border-t border-[#6B1B26] pt-3">
-            Окремі сигнали: соус у бургері, прожарка м'яса, очікування від "стейку".
-          </p>
-        </div>
-
-      </div>
-
-      {/* БЛОК 3: ІНДЕКС NPS ТА ДИНАМІКА ЛОЯЛЬНОСТІ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        
-        {/* Крупний блок NPS */}
-        <div className="bg-[#E8DCC4] text-[#4A0E17] p-8 rounded-3xl flex flex-col justify-between shadow-xl">
-          <div>
-            <span className="text-[10px] uppercase tracking-[0.3em] font-black opacity-60">Лояльність бренду</span>
-            <h3 className="text-7xl font-black tracking-tighter my-2">+{npsScore}</h3>
-            <p className="text-sm font-semibold uppercase tracking-wider">Сильна любов до бренду</p>
-          </div>
-          <div className="mt-6 pt-4 border-t border-[#4A0E17]/10 text-xs space-y-1.5 opacity-90">
-            <div className="flex justify-between"><span>Промоутери (9-10)</span><span className="font-bold">{promoters} ({Math.round(promoters/totalGuests*100)}%)</span></div>
-            <div className="flex justify-between"><span>Пасивні (7-8)</span><span className="font-bold">{passives}</span></div>
-            <div className="flex justify-between"><span>Критики (0-6)</span><span className="font-bold">{detractors}</span></div>
-          </div>
-        </div>
-
-        {/* Графік NPS */}
-        <div className="bg-[#5C1621] p-6 rounded-2xl border border-[#6B1B26] lg:col-span-2 flex flex-col justify-between">
-          <div>
-            <h4 className="text-xs uppercase tracking-[0.2em] text-[#CBB5A1] font-bold mb-1">Фідбек гостей у динаміці</h4>
-            <h3 className="text-base font-bold text-white mb-4">Тренди задоволеності по днях</h3>
-          </div>
-          <div className="h-[180px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={[
-                { name: '23.06', NPS: -50 },
-                { name: '29.06', NPS: 0 },
-                { name: '30.06', NPS: 100 },
-                { name: '01.07', NPS: 92 },
-                { name: '04.07', NPS: 100 }
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#6B1B26" vertical={false} />
-                <XAxis dataKey="name" stroke="#CBB5A1" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#CBB5A1" domain={[-100, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ backgroundColor: '#4A0E17', borderColor: '#6B1B26', color: '#FFF8F2' }} />
-                <Line type="monotone" dataKey="NPS" stroke="#E8DCC4" strokeWidth={3} dot={{ r: 6, fill: '#E8DCC4' }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-[11px] text-[#CBB5A1] mt-2 font-light">Головний висновок: старт дуже сильний, але база ще нова — потрібна механіка повторного візиту.</p>
-        </div>
-
-      </div>
-
-      {/* БЛОК 4: АУДИТОРІЯ ТА СЛУЖБОВІ ЗАУВАЖЕННЯ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Демографія */}
-        <div className="bg-[#5C1621] p-6 rounded-2xl border border-[#6B1B26]">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-[#CBB5A1] font-bold mb-4">Люди / Аудиторія</h4>
-          <div className="space-y-3 text-xs font-light">
-            <div className="flex justify-between border-b border-[#6B1B26] pb-2"><span>Жінки</span><span className="font-bold text-[#E8DCC4]">{women}</span></div>
-            <div className="flex justify-between border-b border-[#6B1B26] pb-2"><span>Чоловіки</span><span className="font-bold text-[#E8DCC4]">{men}</span></div>
-            <div className="pt-2 text-[11px] text-[#CBB5A1] uppercase tracking-wider font-bold mb-1">Вікові групи:</div>
-            {Object.keys(ageGroups).map(k => (
-              <div key={k} className="flex justify-between text-[11px]"><span>{k} років</span><span>{ageGroups[k]} чол.</span></div>
-            ))}
-          </div>
-        </div>
-
-        {/* Скарги на зал */}
-        <div className="bg-[#3D0A11] p-6 rounded-2xl border border-[#5C1621]">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-[#CBB5A1] font-bold mb-4">Основні незручності залу</h4>
-          <div className="space-y-3 text-xs">
-            <div className="flex justify-between"><span>Столи близько</span><span className="text-[#E8DCC4] font-bold">10 згадок</span></div>
-            <div className="flex justify-between"><span>Температура</span><span className="text-[#E8DCC4] font-bold">6 згадок</span></div>
-            <div className="flex justify-between"><span>Доступність води / антисептики</span><span className="text-[#E8DCC4] font-bold">4 згадок</span></div>
-          </div>
-        </div>
-
-        {/* Радар критичних виправлень q14 */}
-        <div className="bg-[#5C1621] p-6 rounded-2xl border border-[#6B1B26] flex flex-col justify-between">
-          <div>
-            <h4 className="text-xs uppercase tracking-[0.2em] text-[#E8DCC4] font-bold mb-3 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4" /> Терміново до виправлення
-            </h4>
-            <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
-              {criticalFixes.length === 0 ? (
-                <p className="text-xs text-[#CBB5A1] italic font-light">Критичних інцидентів чи скарг на роботу офіціантів за поточний період не виявлено. Все стабільно.</p>
-              ) : (
-                criticalFixes.map((f, i) => <p key={i} className="text-[11px] bg-[#4A0E17] p-2 rounded border border-[#6B1B26] font-light">"{f}"</p>)
-              )}
-            </div>
-          </div>
-          <div className="border-t border-[#6B1B26] pt-2 mt-4 text-[11px] text-[#CBB5A1]">
-            <span className="font-bold text-white block mb-0.5">Людський фактор:</span>
-            Окремо згадували Олександру / адміністраторку як сильний позитивний контакт. Рекомендація: зафіксувати практику.
-          </div>
-        </div>
-
-      </div>
-
-    </div>
-  );
+    {theme&&<div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm md:items-center" onClick={()=>setTheme(null)}><div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-[30px] border border-white/10 bg-[#410A1B] p-7" onClick={e=>e.stopPropagation()}><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">{theme.tone==='positive'?'Love driver':'Action signal'}</p><h3 className="mt-1 text-2xl font-black">{theme.label}</h3><p className="mt-2 text-sm text-white/45">{theme.count} згадок</p></div><button onClick={()=>setTheme(null)}><X className="h-5 w-5"/></button></div><div className="mt-6 space-y-3">{theme.samples.map((s,i)=><div key={i} className="rounded-2xl border border-white/8 bg-black/15 p-4"><p className="text-[10px] uppercase text-white/30">Приклад {i+1}</p><p className="mt-2 text-sm text-white/70">{s}</p></div>)}</div></div></div>}
+    {row&&<div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm md:items-center" onClick={()=>setRow(null)}><div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-[30px] border border-white/10 bg-[#410A1B] p-7" onClick={e=>e.stopPropagation()}><div className="flex justify-between"><div><p className="text-[10px] uppercase tracking-[.22em] text-white/35">Повний запис</p><h3 className="mt-1 text-2xl font-black">{txt(row,A.id)||txt(row,A.dishName)||'Рядок даних'}</h3></div><button onClick={()=>setRow(null)}><X className="h-5 w-5"/></button></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{Object.entries(row).map(([k,v])=><div key={k} className="rounded-2xl border border-white/8 bg-black/15 p-4"><p className="text-[10px] uppercase tracking-[.13em] text-white/30">{k}</p><p className="mt-2 break-words text-sm text-white/75">{v===null||v===undefined||v===''?'—':String(v)}</p></div>)}</div></div></div>}
+    <footer className="relative border-t border-white/8"><div className="mx-auto flex max-w-[1680px] flex-col gap-2 px-4 py-5 text-xs text-white/30 md:flex-row md:justify-between md:px-8"><span><b className="text-[#CFF3F2]">MARMOO</b> • Experience BI • General + Dishes</span><span>{fd(range.start)} — {fd(range.end)} • {general.length} відповідей</span></div></footer>
+  </div>;
 }
