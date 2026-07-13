@@ -4,7 +4,8 @@ import { defaultFeedbackData, FeedbackData } from './types';
 import { Button, Pill, StarRating, ScaleRating, TextInput, QuestionLabel } from './components/ui';
 import { Loader2, RefreshCw } from 'lucide-react';
 
-const SCRIPT_URL = import.meta.env.VITE_API_URL || "";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec";
+
 const TOTAL_STEPS = 9; 
 
 export default function App() {
