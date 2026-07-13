@@ -19,6 +19,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  MARMOO_DATA_URL: https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec
 
 jobs:
   deploy:
@@ -42,11 +43,29 @@ jobs:
       - name: Fetch General and Dishes snapshot
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p public
-          curl --fail --location --retry 3 --retry-delay 5 \
-            "https://script.google.com/macros/s/AKfycbwAQxi7IhIxOjo7AJTzS53vJVjh5UHeNNbGFPmYt0i-bePY2YQBZvZ6jaYBbpRLqu3E/exec" \
+
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-delay 5 \
+            "$MARMOO_DATA_URL" \
             --output public/data.json
-          node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('public/data.json','utf8')); if(!Array.isArray(j.general)||!Array.isArray(j.dishes)) throw new Error('Invalid BI payload'); console.log('Loaded',j.general.length,'General rows and',j.dishes.length,'Dishes rows');"
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const raw = fs.readFileSync('public/data.json', 'utf8').trim();
+
+          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
+            throw new Error('Apps Script returned HTML instead of JSON. Check the deployed /exec URL and doGet().');
+          }
+
+          const payload = JSON.parse(raw);
+          if (!Array.isArray(payload.general) || !Array.isArray(payload.dishes)) {
+            throw new Error('Invalid BI payload: expected general[] and dishes[].');
+          }
+
+          console.log(`Loaded ${payload.general.length} General rows and ${payload.dishes.length} Dishes rows`);
+          NODE
 
       - name: Build Project
         run: npm run build
