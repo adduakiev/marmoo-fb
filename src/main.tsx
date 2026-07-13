@@ -4,12 +4,13 @@ import App from './App.tsx';
 import Dashboard from './Dashboard.tsx';
 import './index.css';
 
-// Простий та надійний роутинг на основі поточного шляху в URL
-const currentPath = window.location.pathname;
+// Витягуємо параметри з URL-рядка
+const searchParams = new URLSearchParams(window.location.search);
+const currentView = searchParams.get('view');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {currentPath.endsWith('/dashboard') || currentPath.endsWith('/dashboard/') ? (
+    {currentView === 'dashboard' ? (
       <Dashboard />
     ) : (
       <App />
