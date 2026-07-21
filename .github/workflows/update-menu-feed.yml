@@ -6,6 +6,7 @@ on:
     branches: ["main"]
     paths:
       - "scripts/update-menu-feed.mjs"
+      - "scripts/enrich-feed-links.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/update-menu-feed.yml"
@@ -64,6 +65,14 @@ jobs:
           MARMOO_FEED_STATUS_PATH: public/feed/status.json
         run: npm run update:menu-feed
 
+      - name: Add direct dish links from sitemap
+        if: steps.kyiv-time.outputs.run == 'true'
+        env:
+          MARMOO_SITEMAP_URL: https://marmooolymp.choiceqr.com/sitemap.xml
+          MARMOO_FEED_PATH: public/feed/marmoo-menu.xml
+          MARMOO_FEED_STATUS_PATH: public/feed/status.json
+        run: node scripts/enrich-feed-links.mjs
+
       - name: Validate XML and minimum item count
         if: steps.kyiv-time.outputs.run == 'true'
         shell: bash
@@ -73,12 +82,15 @@ jobs:
           import xml.etree.ElementTree as ET
           tree = ET.parse('public/feed/marmoo-menu.xml')
           items = tree.findall('.//item')
+          direct_links = tree.findall('.//dish_url')
           status = json.load(open('public/feed/status.json', encoding='utf-8'))
           if len(items) < 10:
               raise SystemExit(f'Safety stop: only {len(items)} items')
           if status.get('total_items') != len(items):
               raise SystemExit('XML/status item count mismatch')
-          print(f'Validated {len(items)} menu items')
+          if len(direct_links) < 10:
+              raise SystemExit(f'Safety stop: only {len(direct_links)} direct dish links')
+          print(f'Validated {len(items)} menu items and {len(direct_links)} dish links')
           PY
 
       - name: Commit refreshed feed
