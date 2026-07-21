@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 
+// Link matcher v1.3.1: direct ChoiceQR dish pages only.
 const FEED_PATH = process.env.MARMOO_FEED_PATH || 'public/feed/marmoo-menu.xml';
 const STATUS_PATH = process.env.MARMOO_FEED_STATUS_PATH || 'public/feed/status.json';
 const SITEMAP_URL = process.env.MARMOO_SITEMAP_URL || 'https://marmooolymp.choiceqr.com/sitemap.xml';
