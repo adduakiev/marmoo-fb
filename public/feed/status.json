@@ -1,10 +1,15 @@
 {
   "ok": true,
-  "generated_at": "2026-07-21T08:04:53.630Z",
+  "generated_at": "2026-07-21T09:27:08.314Z",
   "timezone": "Europe/Kyiv",
+  "scheduled_update": "12:00 Europe/Kyiv",
   "source_url": "https://marmooolymp.choiceqr.com/online-menu",
   "total_items": 78,
-  "categories": 1,
+  "categories": 10,
+  "available_items": 51,
+  "unavailable_items": 0,
+  "unknown_stock_items": 27,
+  "prices_normalized_from_minor_units": true,
   "json_responses_inspected": 10,
   "dom_candidates": 0
 }
