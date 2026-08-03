@@ -5,8 +5,8 @@ on:
     branches: ["main"]
   workflow_dispatch:
   schedule:
-    # Refresh dashboard data every 30 minutes.
-    - cron: "*/30 * * * *"
+    # Nightly refresh at 02:15 UTC (04:15/05:15 Kyiv depending on DST).
+    - cron: "15 2 * * *"
 
 permissions:
   contents: read
