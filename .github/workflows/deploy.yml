@@ -20,6 +20,7 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   MARMOO_DATA_URL: https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec
+  MARMOO_SALES_DATA_URL: https://script.google.com/macros/s/AKfycbzgWeDuDcGvTO7vCD8eMA4cfIuHTt9K2JEKD86Uo51Lj1oCcKw1K9JK5MwTha63g3hnKA/exec
 
 jobs:
   deploy:
@@ -56,15 +57,57 @@ jobs:
           const raw = fs.readFileSync('public/data.json', 'utf8').trim();
 
           if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
-            throw new Error('Apps Script returned HTML instead of JSON. Check the deployed /exec URL and doGet().');
+            throw new Error('Feedback Apps Script returned HTML instead of JSON. Check the deployed /exec URL and doGet().');
           }
 
           const payload = JSON.parse(raw);
           if (!Array.isArray(payload.general) || !Array.isArray(payload.dishes)) {
-            throw new Error('Invalid BI payload: expected general[] and dishes[].');
+            throw new Error('Invalid feedback BI payload: expected general[] and dishes[].');
           }
 
           console.log(`Loaded ${payload.general.length} General rows and ${payload.dishes.length} Dishes rows`);
+          NODE
+
+      - name: Fetch Sales BI snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-delay 5 \
+            "$MARMOO_SALES_DATA_URL" \
+            --output public/sales-data.json
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const raw = fs.readFileSync('public/sales-data.json', 'utf8').trim();
+
+          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
+            throw new Error('Sales Apps Script returned HTML instead of JSON. Check the deployed /exec URL and doGet().');
+          }
+
+          const payload = JSON.parse(raw);
+
+          if (payload.ok === false) {
+            throw new Error(`Sales API error: ${payload.error || 'unknown error'}`);
+          }
+
+          const valid =
+            payload.summary &&
+            Array.isArray(payload.daily) &&
+            Array.isArray(payload.channels) &&
+            Array.isArray(payload.hourly) &&
+            Array.isArray(payload.products);
+
+          if (!valid) {
+            throw new Error('Invalid Sales BI payload: expected summary, daily[], channels[], hourly[] and products[].');
+          }
+
+          console.log(
+            `Loaded Sales BI: ${payload.summary.orders || 0} orders, ` +
+            `${payload.daily.length} days, ${payload.products.length} products`
+          );
           NODE
 
       - name: Build Project
