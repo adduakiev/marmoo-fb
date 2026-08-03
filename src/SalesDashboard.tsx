@@ -80,9 +80,39 @@ type SalesPayload = {
   products: ProductPoint[];
 };
 
-type PeriodKey = '7' | '14' | '30' | 'all';
+type PeriodKey =
+  | 'today'
+  | 'yesterday'
+  | '7d'
+  | '30d'
+  | 'current_week'
+  | 'previous_week'
+  | 'current_month'
+  | 'previous_month'
+  | 'all';
+
+type DateRange = {
+  from: Date | null;
+  to: Date | null;
+  comparisonFrom: Date | null;
+  comparisonTo: Date | null;
+  label: string;
+  comparisonLabel: string;
+};
 
 const SALES_DATA_URL = `${import.meta.env.BASE_URL || '/'}sales-data.json`;
+
+const PERIOD_OPTIONS: Array<{ key: PeriodKey; label: string }> = [
+  { key: 'today', label: 'Сьогодні' },
+  { key: 'yesterday', label: 'Вчора' },
+  { key: '7d', label: '7 днів' },
+  { key: '30d', label: '30 днів' },
+  { key: 'current_week', label: 'Поточний тиждень' },
+  { key: 'previous_week', label: 'Минулий тиждень' },
+  { key: 'current_month', label: 'Поточний місяць' },
+  { key: 'previous_month', label: 'Минулий місяць' },
+  { key: 'all', label: 'Весь період' },
+];
 
 const money = (value: number) =>
   `${new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 }).format(value || 0)} ₴`;
@@ -92,10 +122,43 @@ const number = (value: number) =>
 
 const percent = (value: number) => `${(value || 0).toFixed(1)}%`;
 
+const parseDate = (value: string) => new Date(`${value}T00:00:00`);
+
+const startOfDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const addDays = (date: Date, days: number) => {
+  const result = startOfDay(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const startOfWeek = (date: Date) => {
+  const result = startOfDay(date);
+  const weekday = result.getDay() || 7;
+  result.setDate(result.getDate() - weekday + 1);
+  return result;
+};
+
+const endOfWeek = (date: Date) => addDays(startOfWeek(date), 6);
+
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const endOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
 const dateLabel = (value: string) => {
-  const date = new Date(`${value}T00:00:00`);
+  const date = parseDate(value);
   if (Number.isNaN(date.getTime())) return value || '—';
   return new Intl.DateTimeFormat('uk-UA', { day: '2-digit', month: 'short' }).format(date);
+};
+
+const fullDateLabel = (value: Date | null) => {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('uk-UA', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(value);
 };
 
 const tooltipStyle = {
@@ -105,6 +168,118 @@ const tooltipStyle = {
   color: '#fffaf7',
   boxShadow: '0 20px 50px rgba(20,0,8,.35)',
 };
+
+function buildPeriodRange(period: PeriodKey, today: Date): DateRange {
+  const day = startOfDay(today);
+
+  if (period === 'today') {
+    return {
+      from: day,
+      to: day,
+      comparisonFrom: addDays(day, -1),
+      comparisonTo: addDays(day, -1),
+      label: 'Сьогодні',
+      comparisonLabel: 'до вчора',
+    };
+  }
+
+  if (period === 'yesterday') {
+    const yesterday = addDays(day, -1);
+    return {
+      from: yesterday,
+      to: yesterday,
+      comparisonFrom: addDays(day, -2),
+      comparisonTo: addDays(day, -2),
+      label: 'Вчора',
+      comparisonLabel: 'до позавчора',
+    };
+  }
+
+  if (period === '7d' || period === '30d') {
+    const days = period === '7d' ? 7 : 30;
+    const from = addDays(day, -(days - 1));
+    return {
+      from,
+      to: day,
+      comparisonFrom: addDays(from, -days),
+      comparisonTo: addDays(day, -days),
+      label: `Останні ${days} днів`,
+      comparisonLabel: `до попередніх ${days} днів`,
+    };
+  }
+
+  if (period === 'current_week') {
+    const from = startOfWeek(day);
+    return {
+      from,
+      to: day,
+      comparisonFrom: addDays(from, -7),
+      comparisonTo: addDays(day, -7),
+      label: 'Поточний тиждень',
+      comparisonLabel: 'до такого ж періоду минулого тижня',
+    };
+  }
+
+  if (period === 'previous_week') {
+    const to = addDays(startOfWeek(day), -1);
+    const from = addDays(to, -6);
+    return {
+      from,
+      to,
+      comparisonFrom: addDays(from, -7),
+      comparisonTo: addDays(to, -7),
+      label: 'Минулий тиждень',
+      comparisonLabel: 'до тижня перед ним',
+    };
+  }
+
+  if (period === 'current_month') {
+    const from = startOfMonth(day);
+    const previousMonth = new Date(day.getFullYear(), day.getMonth() - 1, 1);
+    const elapsedDay = day.getDate();
+    const comparisonTo = new Date(
+      previousMonth.getFullYear(),
+      previousMonth.getMonth(),
+      Math.min(elapsedDay, endOfMonth(previousMonth).getDate()),
+    );
+    return {
+      from,
+      to: day,
+      comparisonFrom: previousMonth,
+      comparisonTo,
+      label: 'Поточний місяць',
+      comparisonLabel: 'до такого ж періоду минулого місяця',
+    };
+  }
+
+  if (period === 'previous_month') {
+    const previousMonth = new Date(day.getFullYear(), day.getMonth() - 1, 1);
+    const monthBefore = new Date(day.getFullYear(), day.getMonth() - 2, 1);
+    return {
+      from: previousMonth,
+      to: endOfMonth(previousMonth),
+      comparisonFrom: monthBefore,
+      comparisonTo: endOfMonth(monthBefore),
+      label: 'Минулий місяць',
+      comparisonLabel: 'до місяця перед ним',
+    };
+  }
+
+  return {
+    from: null,
+    to: null,
+    comparisonFrom: null,
+    comparisonTo: null,
+    label: 'Весь період',
+    comparisonLabel: 'без порівняння',
+  };
+}
+
+function isInRange(value: string, from: Date | null, to: Date | null) {
+  if (!from || !to) return true;
+  const date = parseDate(value);
+  return date >= from && date <= to;
+}
 
 function delta(current: number, previous: number) {
   if (!previous) return null;
@@ -125,14 +300,17 @@ function aggregateDaily(rows: DailyPoint[]) {
   };
 }
 
-function DeltaBadge({ value }: { value: number | null }) {
-  if (value === null) return <span className="text-xs opacity-45">немає бази порівняння</span>;
+function DeltaBadge({ value, label }: { value: number | null; label: string }) {
+  if (value === null) return <span className="text-[11px] opacity-40">{label}</span>;
   const positive = value >= 0;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${positive ? 'bg-emerald-500/15 text-emerald-200' : 'bg-rose-500/15 text-rose-200'}`}>
-      {positive ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-      {positive ? '+' : ''}{value.toFixed(1)}%
-    </span>
+    <div className="flex flex-col items-end gap-1">
+      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${positive ? 'bg-emerald-500/15 text-emerald-200' : 'bg-rose-500/15 text-rose-200'}`}>
+        {positive ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+        {positive ? '+' : ''}{value.toFixed(1)}%
+      </span>
+      <span className="text-[10px] opacity-40 text-right">{label}</span>
+    </div>
   );
 }
 
@@ -141,6 +319,7 @@ function MetricCard({
   value,
   helper,
   change,
+  comparisonLabel,
   icon: Icon,
   tone = 'light',
 }: {
@@ -148,6 +327,7 @@ function MetricCard({
   value: string;
   helper: string;
   change?: number | null;
+  comparisonLabel: string;
   icon: React.ElementType;
   tone?: 'light' | 'mint' | 'dark';
 }) {
@@ -166,9 +346,9 @@ function MetricCard({
         </div>
       </div>
       <div className="mt-3 text-[32px] leading-none font-black tracking-[-0.04em]">{value}</div>
-      <div className="mt-4 flex items-center justify-between gap-3">
+      <div className="mt-4 flex items-start justify-between gap-3">
         <span className="text-xs opacity-65">{helper}</span>
-        {change !== undefined && <DeltaBadge value={change} />}
+        {change !== undefined && <DeltaBadge value={change} label={comparisonLabel} />}
       </div>
     </div>
   );
@@ -208,7 +388,7 @@ function EmptyState({ onReload }: { onReload: () => void }) {
 export default function SalesDashboard() {
   const [data, setData] = useState<SalesPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<PeriodKey>('7');
+  const [period, setPeriod] = useState<PeriodKey>('current_month');
 
   const loadData = async () => {
     setLoading(true);
@@ -225,17 +405,18 @@ export default function SalesDashboard() {
 
   useEffect(() => { loadData(); }, []);
 
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const range = useMemo(() => buildPeriodRange(period, today), [period, today]);
+
   const selectedDaily = useMemo(() => {
     if (!data) return [];
-    if (period === 'all') return data.daily;
-    return data.daily.slice(-Number(period));
-  }, [data, period]);
+    return data.daily.filter((row) => isInRange(row.date, range.from, range.to));
+  }, [data, range]);
 
   const previousDaily = useMemo(() => {
     if (!data || period === 'all') return [];
-    const size = Number(period);
-    return data.daily.slice(-(size * 2), -size);
-  }, [data, period]);
+    return data.daily.filter((row) => isInRange(row.date, range.comparisonFrom, range.comparisonTo));
+  }, [data, period, range]);
 
   const current = useMemo(() => aggregateDaily(selectedDaily), [selectedDaily]);
   const previous = useMemo(() => aggregateDaily(previousDaily), [previousDaily]);
@@ -245,6 +426,7 @@ export default function SalesDashboard() {
     orders: period === 'all' ? null : delta(current.orders, previous.orders),
     averageCheck: period === 'all' ? null : delta(current.averageCheck, previous.averageCheck),
     markup: period === 'all' ? null : delta(current.markup, previous.markup),
+    cost: period === 'all' ? null : delta(current.cost, previous.cost),
   };
 
   const topProducts = useMemo(() => {
@@ -257,7 +439,10 @@ export default function SalesDashboard() {
     return [...data.hourly].sort((a, b) => b.revenue - a.revenue)[0];
   }, [data]);
 
-  const channelTotal = useMemo(() => data?.channels.reduce((sum, item) => sum + item.revenue, 0) || 0, [data]);
+  const channelTotal = useMemo(
+    () => data?.channels.reduce((sum, item) => sum + item.revenue, 0) || 0,
+    [data],
+  );
 
   const insights = useMemo(() => {
     if (!data) return [];
@@ -265,24 +450,30 @@ export default function SalesDashboard() {
     const bestChannel = data.channels[0];
     const bestProduct = topProducts[0];
     return [
-      comparisons.revenue === null ? null : `Оборот ${comparisons.revenue >= 0 ? 'виріс' : 'знизився'} на ${Math.abs(comparisons.revenue).toFixed(1)}% проти попереднього періоду.`,
-      comparisons.averageCheck === null ? null : `Середній чек ${comparisons.averageCheck >= 0 ? 'виріс' : 'знизився'} на ${Math.abs(comparisons.averageCheck).toFixed(1)}%.`,
-      bestDay ? `Найкращий день у вибраному періоді — ${dateLabel(bestDay.date)}: ${money(bestDay.revenue)}.` : null,
-      hourPeak ? `Пікова година — ${hourPeak.hour}:00, оборот ${money(hourPeak.revenue)}.` : null,
-      bestChannel ? `Найбільший канал — ${bestChannel.channel}: ${money(bestChannel.revenue)}.` : null,
-      bestProduct ? `Топ-страва за оборотом — ${bestProduct.productName}: ${money(bestProduct.revenue)}.` : null,
+      comparisons.revenue === null
+        ? null
+        : `Оборот ${comparisons.revenue >= 0 ? 'виріс' : 'знизився'} на ${Math.abs(comparisons.revenue).toFixed(1)}% ${range.comparisonLabel}.`,
+      comparisons.averageCheck === null
+        ? null
+        : `Середній чек ${comparisons.averageCheck >= 0 ? 'виріс' : 'знизився'} на ${Math.abs(comparisons.averageCheck).toFixed(1)}%.`,
+      bestDay ? `Найкращий день — ${dateLabel(bestDay.date)}: ${money(bestDay.revenue)}.` : null,
+      selectedDaily.length === 0 ? 'У вибраному періоді ще немає даних.' : null,
+      hourPeak ? `Пікова година за всіма даними — ${hourPeak.hour}:00, оборот ${money(hourPeak.revenue)}.` : null,
+      bestChannel ? `Найбільший канал за весь період — ${bestChannel.channel}: ${money(bestChannel.revenue)}.` : null,
+      bestProduct ? `Топ-страва за весь період — ${bestProduct.productName}: ${money(bestProduct.revenue)}.` : null,
     ].filter(Boolean) as string[];
-  }, [data, selectedDaily, topProducts, hourPeak, comparisons.revenue, comparisons.averageCheck]);
+  }, [data, selectedDaily, topProducts, hourPeak, comparisons.revenue, comparisons.averageCheck, range.comparisonLabel]);
 
   if (loading) {
     return <div className="min-h-screen bg-[#4d071e] text-white flex items-center justify-center"><RefreshCw className="animate-spin" /></div>;
   }
+
   if (!data) return <EmptyState onReload={loadData} />;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,#7d1640_0%,#580822_34%,#3c0417_100%)] text-white">
       <div className="mx-auto max-w-[1600px] px-4 md:px-8 py-6 md:py-9">
-        <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-7">
+        <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-5">
           <div>
             <div className="flex items-center gap-3 text-[#cfeeed]">
               <div className="h-11 w-11 rounded-2xl border border-white/10 bg-white/[0.06] flex items-center justify-center"><BarChart3 size={23} /></div>
@@ -291,45 +482,63 @@ export default function SalesDashboard() {
                 <h1 className="text-4xl md:text-5xl font-black tracking-[-0.055em]">Sales BI</h1>
               </div>
             </div>
-            <p className="mt-4 text-white/50 text-sm">Олімпійська · Велика Васильківська, 57/3 · {dateLabel(data.period.from)} — {dateLabel(data.period.to)}</p>
+            <p className="mt-4 text-white/50 text-sm">Олімпійська · Велика Васильківська, 57/3</p>
+            <p className="mt-1 text-[#cfeeed]/70 text-sm font-semibold">
+              {range.label}{range.from && range.to ? ` · ${fullDateLabel(range.from)} — ${fullDateLabel(range.to)}` : ` · ${dateLabel(data.period.from)} — ${dateLabel(data.period.to)}`}
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {(['7', '14', '30', 'all'] as PeriodKey[]).map((key) => (
-              <button key={key} onClick={() => setPeriod(key)} className={`rounded-xl px-4 py-2.5 text-sm font-bold border transition ${period === key ? 'bg-[#cfeeed] text-[#5b0b25] border-[#cfeeed]' : 'bg-white/[0.05] border-white/10 text-white/65'}`}>
-                {key === 'all' ? 'Весь період' : `${key} днів`}
-              </button>
-            ))}
-            <button onClick={loadData} className="rounded-xl border border-white/10 bg-white/[0.06] p-3 text-white/70"><RefreshCw size={17} /></button>
-          </div>
+          <button onClick={loadData} className="self-start xl:self-auto rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-bold text-white/70 inline-flex items-center gap-2">
+            <RefreshCw size={17} /> Оновити snapshot
+          </button>
         </header>
 
+        <div className="mb-6 overflow-x-auto pb-2">
+          <div className="flex min-w-max gap-2">
+            {PERIOD_OPTIONS.map((option) => (
+              <button
+                key={option.key}
+                onClick={() => setPeriod(option.key)}
+                className={`rounded-xl px-4 py-2.5 text-sm font-bold border transition ${period === option.key ? 'bg-[#cfeeed] text-[#5b0b25] border-[#cfeeed]' : 'bg-white/[0.05] border-white/10 text-white/65 hover:bg-white/[0.09]'}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 mb-5">
-          <MetricCard label="Оборот" value={money(current.revenue)} helper="обраний період" change={comparisons.revenue} icon={TrendingUp} tone="mint" />
-          <MetricCard label="Чеки" value={number(current.orders)} helper="завершені замовлення" change={comparisons.orders} icon={CreditCard} />
-          <MetricCard label="Середній чек" value={money(current.averageCheck)} helper="оборот / чеки" change={comparisons.averageCheck} icon={ShoppingBasket} />
-          <MetricCard label="Націнка" value={money(current.markup)} helper={percent(current.markupPercent)} change={comparisons.markup} icon={Flame} tone="mint" />
-          <MetricCard label="Собівартість" value={money(current.cost)} helper="розрахункова" icon={Layers3} />
-          <MetricCard label="Клієнти" value={number(data.summary.identifiedCustomers)} helper={`${number(data.summary.identifiedOrders)} чеків із телефоном`} icon={Users} tone="dark" />
+          <MetricCard label="Оборот" value={money(current.revenue)} helper={range.label} change={comparisons.revenue} comparisonLabel={range.comparisonLabel} icon={TrendingUp} tone="mint" />
+          <MetricCard label="Чеки" value={number(current.orders)} helper="завершені замовлення" change={comparisons.orders} comparisonLabel={range.comparisonLabel} icon={CreditCard} />
+          <MetricCard label="Середній чек" value={money(current.averageCheck)} helper="оборот / чеки" change={comparisons.averageCheck} comparisonLabel={range.comparisonLabel} icon={ShoppingBasket} />
+          <MetricCard label="Націнка" value={money(current.markup)} helper={percent(current.markupPercent)} change={comparisons.markup} comparisonLabel={range.comparisonLabel} icon={Flame} tone="mint" />
+          <MetricCard label="Собівартість" value={money(current.cost)} helper="розрахункова" change={comparisons.cost} comparisonLabel={range.comparisonLabel} icon={Layers3} />
+          <MetricCard label="Клієнти" value={number(data.summary.identifiedCustomers)} helper={`${number(data.summary.identifiedOrders)} чеків із телефоном · весь період`} comparisonLabel="весь період" icon={Users} tone="dark" />
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-          <Panel title="Динаміка продажів" subtitle="Оборот по днях" className="xl:col-span-8">
-            <div className="h-[330px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={selectedDaily}>
-                  <defs><linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#cfeeed" stopOpacity={0.72} /><stop offset="100%" stopColor="#cfeeed" stopOpacity={0.03} /></linearGradient></defs>
-                  <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={dateLabel} tick={{ fill: 'rgba(255,255,255,.48)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} tick={{ fill: 'rgba(255,255,255,.48)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => money(value)} labelFormatter={dateLabel} />
-                  <Area type="monotone" dataKey="revenue" stroke="#cfeeed" strokeWidth={3} fill="url(#salesFill)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+          <Panel title="Динаміка продажів" subtitle={`${range.label} · оборот по днях`} className="xl:col-span-8">
+            {selectedDaily.length ? (
+              <div className="h-[330px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={selectedDaily}>
+                    <defs><linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#cfeeed" stopOpacity={0.72} /><stop offset="100%" stopColor="#cfeeed" stopOpacity={0.03} /></linearGradient></defs>
+                    <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
+                    <XAxis dataKey="date" tickFormatter={dateLabel} tick={{ fill: 'rgba(255,255,255,.48)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} tick={{ fill: 'rgba(255,255,255,.48)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => money(value)} labelFormatter={dateLabel} />
+                    <Area type="monotone" dataKey="revenue" stroke="#cfeeed" strokeWidth={3} fill="url(#salesFill)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[330px] flex items-center justify-center rounded-2xl border border-dashed border-white/10 text-white/35">
+                За цей період даних ще немає
+              </div>
+            )}
           </Panel>
 
-          <Panel title="Що змінилось" subtitle="Автоматичне резюме" className="xl:col-span-4">
+          <Panel title="Що змінилось" subtitle={range.comparisonLabel} className="xl:col-span-4">
             <div className="space-y-3">
               {insights.map((item, index) => (
                 <div key={index} className="rounded-2xl border border-white/8 bg-white/[0.04] p-4 text-sm leading-relaxed text-white/72">
@@ -339,7 +548,7 @@ export default function SalesDashboard() {
             </div>
           </Panel>
 
-          <Panel title="Канали продажів" subtitle="Частка обороту" className="xl:col-span-5">
+          <Panel title="Канали продажів" subtitle="Поки що — весь доступний період" className="xl:col-span-5">
             <div className="space-y-5">
               {data.channels.map((item) => {
                 const share = channelTotal ? (item.revenue / channelTotal) * 100 : 0;
@@ -356,7 +565,7 @@ export default function SalesDashboard() {
             </div>
           </Panel>
 
-          <Panel title="Години попиту" subtitle={hourPeak ? `Пік: ${hourPeak.hour}:00 · ${money(hourPeak.revenue)}` : ''} className="xl:col-span-7">
+          <Panel title="Години попиту" subtitle={hourPeak ? `Весь період · пік ${hourPeak.hour}:00 · ${money(hourPeak.revenue)}` : ''} className="xl:col-span-7">
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.hourly}>
@@ -370,7 +579,7 @@ export default function SalesDashboard() {
             </div>
           </Panel>
 
-          <Panel title="Топ страв" subtitle="За оборотом" className="xl:col-span-12">
+          <Panel title="Топ страв" subtitle="За весь доступний період" className="xl:col-span-12">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead><tr className="text-left text-[10px] uppercase tracking-[0.16em] text-white/35 border-b border-white/10"><th className="pb-4">#</th><th className="pb-4">Страва</th><th className="pb-4">Категорія</th><th className="pb-4 text-right">Кількість</th><th className="pb-4 text-right">Оборот</th><th className="pb-4 text-right">Націнка</th></tr></thead>
@@ -384,7 +593,8 @@ export default function SalesDashboard() {
 
         <footer className="mt-7 flex flex-col md:flex-row gap-3 md:items-center justify-between text-xs text-white/28">
           <div className="flex items-center gap-2"><CalendarDays size={14} /> Snapshot: {new Date(data.updatedAt).toLocaleString('uk-UA')}</div>
-          <div className="flex items-center gap-2"><Activity size={14} /> MARMOO Sales Intelligence v2</div>
+          <div className="flex items-center gap-2"><Clock3 size={14} /> Дані: {dateLabel(data.period.from)} — {dateLabel(data.period.to)}</div>
+          <div className="flex items-center gap-2"><Activity size={14} /> MARMOO Sales Intelligence v3</div>
         </footer>
       </div>
     </div>
