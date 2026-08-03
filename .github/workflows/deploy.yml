@@ -5,7 +5,6 @@ on:
     branches: ["main"]
   workflow_dispatch:
   schedule:
-    # Nightly refresh at 02:15 UTC (04:15/05:15 Kyiv depending on DST).
     - cron: "15 2 * * *"
 
 permissions:
@@ -46,7 +45,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p public
-
           CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
 
           curl --fail --location --silent --show-error \
@@ -57,16 +55,13 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const raw = fs.readFileSync('public/data.json', 'utf8').trim();
-
           if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
-            throw new Error('Feedback Apps Script returned HTML instead of JSON. Check the deployed /exec URL and doGet().');
+            throw new Error('Feedback Apps Script returned HTML instead of JSON.');
           }
-
           const payload = JSON.parse(raw);
           if (!Array.isArray(payload.general) || !Array.isArray(payload.dishes)) {
             throw new Error('Invalid feedback BI payload: expected general[] and dishes[].');
           }
-
           console.log(`Loaded ${payload.general.length} General rows and ${payload.dishes.length} Dishes rows`);
           NODE
 
@@ -75,7 +70,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p public
-
           CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
           SALES_URL="${MARMOO_SALES_DATA_URL}?_=${CACHE_BUST}"
 
@@ -90,49 +84,52 @@ jobs:
 
           node - <<'NODE'
           const fs = require('fs');
-          const raw = fs.readFileSync('public/sales-data.json', 'utf8').trim();
+          const path = 'public/sales-data.json';
+          const raw = fs.readFileSync(path, 'utf8').trim();
 
           if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
-            throw new Error('Sales Apps Script returned HTML instead of JSON. Check the deployed /exec URL and doGet().');
+            throw new Error('Sales Apps Script returned HTML instead of JSON.');
           }
 
           const payload = JSON.parse(raw);
-
           if (payload.ok === false) {
             throw new Error(`Sales API error: ${payload.error || 'unknown error'}`);
           }
-
           if (Number(payload.schemaVersion) !== 2) {
             throw new Error(`Invalid Sales schema: expected schemaVersion 2, received ${payload.schemaVersion ?? 'missing'}`);
           }
 
-          const requiredArrays = [
-            'daily',
-            'channels',
-            'channelsDaily',
-            'hourly',
-            'hourlyDaily',
-            'products',
-            'productsDaily',
-            'heatmap',
-          ];
-
-          if (!payload.summary) {
-            throw new Error('Invalid Sales BI payload: summary is missing.');
-          }
-
+          const requiredArrays = ['daily','channels','channelsDaily','hourly','hourlyDaily','products','productsDaily','heatmap'];
+          if (!payload.summary) throw new Error('Invalid Sales BI payload: summary is missing.');
           for (const key of requiredArrays) {
-            if (!Array.isArray(payload[key])) {
-              throw new Error(`Invalid Sales BI payload: expected ${key}[].`);
-            }
+            if (!Array.isArray(payload[key])) throw new Error(`Invalid Sales BI payload: expected ${key}[].`);
           }
+
+          const OPEN_HOUR = 10;
+          const CLOSE_HOUR = 22;
+          const allHourlyDaily = payload.hourlyDaily;
+          const outOfHours = allHourlyDaily.filter(item => Number(item.hour) < OPEN_HOUR || Number(item.hour) > CLOSE_HOUR);
+
+          payload.operatingHours = { open: OPEN_HOUR, close: CLOSE_HOUR };
+          payload.dataQuality = {
+            ...(payload.dataQuality || {}),
+            outOfHoursRows: outOfHours.length,
+            outOfHoursRevenue: Math.round(outOfHours.reduce((sum, item) => sum + Number(item.revenue || 0), 0) * 100) / 100,
+            outOfHoursOrders: outOfHours.reduce((sum, item) => sum + Number(item.orders || 0), 0)
+          };
+
+          payload.hourlyDaily = allHourlyDaily.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
+          payload.hourly = payload.hourly.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
+          payload.heatmap = payload.heatmap.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
+
+          fs.writeFileSync(path, JSON.stringify(payload));
 
           console.log(
             `Loaded Sales schema v${payload.schemaVersion}: ` +
             `${payload.summary.orders || 0} orders, ` +
-            `${payload.daily.length} days, ` +
-            `${payload.products.length} products, ` +
-            `${payload.heatmap.length} heatmap cells`
+            `${payload.daily.length} days, ${payload.products.length} products, ` +
+            `${payload.heatmap.length} operating-hour heatmap cells. ` +
+            `Out-of-hours rows: ${payload.dataQuality.outOfHoursRows}`
           );
           NODE
 
