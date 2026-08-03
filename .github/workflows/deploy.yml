@@ -47,9 +47,11 @@ jobs:
           set -euo pipefail
           mkdir -p public
 
+          CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
+
           curl --fail --location --silent --show-error \
             --retry 3 --retry-delay 5 \
-            "$MARMOO_DATA_URL" \
+            "${MARMOO_DATA_URL}?_=${CACHE_BUST}" \
             --output public/data.json
 
           node - <<'NODE'
@@ -68,15 +70,22 @@ jobs:
           console.log(`Loaded ${payload.general.length} General rows and ${payload.dishes.length} Dishes rows`);
           NODE
 
-      - name: Fetch Sales BI snapshot
+      - name: Fetch Sales BI schema v2 snapshot
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p public
 
+          CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
+          SALES_URL="${MARMOO_SALES_DATA_URL}?_=${CACHE_BUST}"
+
+          echo "Fetching fresh Sales snapshot..."
+
           curl --fail --location --silent --show-error \
             --retry 3 --retry-delay 5 \
-            "$MARMOO_SALES_DATA_URL" \
+            --header "Cache-Control: no-cache, no-store, max-age=0" \
+            --header "Pragma: no-cache" \
+            "$SALES_URL" \
             --output public/sales-data.json
 
           node - <<'NODE'
@@ -93,27 +102,43 @@ jobs:
             throw new Error(`Sales API error: ${payload.error || 'unknown error'}`);
           }
 
-          const valid =
-            payload.summary &&
-            Array.isArray(payload.daily) &&
-            Array.isArray(payload.channels) &&
-            Array.isArray(payload.hourly) &&
-            Array.isArray(payload.products);
+          if (Number(payload.schemaVersion) !== 2) {
+            throw new Error(`Invalid Sales schema: expected schemaVersion 2, received ${payload.schemaVersion ?? 'missing'}`);
+          }
 
-          if (!valid) {
-            throw new Error('Invalid Sales BI payload: expected summary, daily[], channels[], hourly[] and products[].');
+          const requiredArrays = [
+            'daily',
+            'channels',
+            'channelsDaily',
+            'hourly',
+            'hourlyDaily',
+            'products',
+            'productsDaily',
+            'heatmap',
+          ];
+
+          if (!payload.summary) {
+            throw new Error('Invalid Sales BI payload: summary is missing.');
+          }
+
+          for (const key of requiredArrays) {
+            if (!Array.isArray(payload[key])) {
+              throw new Error(`Invalid Sales BI payload: expected ${key}[].`);
+            }
           }
 
           console.log(
-            `Loaded Sales BI: ${payload.summary.orders || 0} orders, ` +
-            `${payload.daily.length} days, ${payload.products.length} products`
+            `Loaded Sales schema v${payload.schemaVersion}: ` +
+            `${payload.summary.orders || 0} orders, ` +
+            `${payload.daily.length} days, ` +
+            `${payload.products.length} products, ` +
+            `${payload.heatmap.length} heatmap cells`
           );
           NODE
 
       - name: Build Project
         run: npm run build
         env:
-          # Browser reads same-origin JSON from GitHub Pages, avoiding Apps Script CORS.
           VITE_API_URL: /marmoo-fb/data.json
 
       - name: Setup Pages
