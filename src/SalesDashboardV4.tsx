@@ -1,6 +1,6 @@
 import React,{useEffect}from'react';
 import SalesDashboardV3 from'./SalesDashboardV3';
-import{cleanProductRows,normalizeProductName}from'./sales/semantic';
+import{cleanProductRows,normalizeProductName,selectSemanticCategory}from'./sales/semantic';
 
 const nativeFetch=window.fetch.bind(window);
 let installed=false;
@@ -14,16 +14,20 @@ function normalizeProducts(payload:any){
     const productName=normalizeProductName(row.productName);
     const category=String(row.category||'Без категорії').trim()||'Без категорії';
     const date=String(row.date||'');
-    const key=`${date}|${productName.toLowerCase()}|${category.toLowerCase()}`;
+
+    // Same dish is merged across delivery, promo and normal categories.
+    const key=`${date}|${productName.toLowerCase()}`;
     const current=grouped.get(key)||{
       ...row,
-      productCode:`semantic:${productName.toLowerCase()}|${category.toLowerCase()}`,
+      productCode:`semantic:${productName.toLowerCase()}`,
       productName,
       category,
       quantity:0,
       revenue:0,
       markup:0
     };
+
+    current.category=selectSemanticCategory(current.category,category);
     current.quantity+=Number(row.quantity)||0;
     current.revenue+=Number(row.revenue)||0;
     current.markup+=Number(row.markup)||0;
