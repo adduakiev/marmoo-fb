@@ -19,7 +19,7 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   MARMOO_DATA_URL: https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec
-  MARMOO_SALES_DATA_URL: https://script.google.com/macros/s/AKfycbyrXsrdmBk1Qk_-c0FgrUxtf2CPaSGUtxfIZaAMP6UDQ7T1bIvwwyxHfD4uIllMdvgYOA/exec
+  MARMOO_SALES_DATA_URL: https://script.google.com/macros/s/AKfycbz-ptK7zk4cVFNwCkjUhghPYlVCORiqyafmGtI9dvxqCOJIGV4K12dlhZq4OlaIO0yyzQ/exec
 
 jobs:
   deploy:
