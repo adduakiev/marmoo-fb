@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import Dashboard from './Dashboard.tsx';
-import SalesDashboard from './SalesDashboardV2.tsx';
+import SalesDashboard from './SalesDashboardV3.tsx';
 import './index.css';
 
 type RouteName = 'form' | 'dashboard' | 'dashboard_sales';
