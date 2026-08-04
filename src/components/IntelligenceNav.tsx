@@ -1,12 +1,13 @@
-import { BarChart3, BrainCircuit, CalendarDays, Clock3, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, BrainCircuit, CalendarDays, Clock3, Layers3, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
 
-type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday';
+type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday' | 'dashboard_categories';
 
 const items = [
   { key: 'dashboard_executive' as const, label: 'Executive', href: '#dashboard_executive', icon: BrainCircuit },
   { key: 'dashboard' as const, label: 'Відгуки', href: '#dashboard', icon: MessageSquareText },
   { key: 'dashboard_sales' as const, label: 'Sales BI', href: '#dashboard_sales', icon: BarChart3 },
   { key: 'dashboard_menu' as const, label: 'Menu Intelligence', href: '#dashboard_menu', icon: UtensilsCrossed },
+  { key: 'dashboard_categories' as const, label: 'Categories', href: '#dashboard_categories', icon: Layers3 },
   { key: 'dashboard_channels' as const, label: 'Channel Intelligence', href: '#dashboard_channels', icon: Radio },
   { key: 'dashboard_daypart' as const, label: 'Daypart', href: '#dashboard_daypart', icon: Clock3 },
   { key: 'dashboard_weekday' as const, label: 'Weekday', href: '#dashboard_weekday', icon: CalendarDays },
