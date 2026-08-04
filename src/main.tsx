@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import Dashboard from './Dashboard.tsx';
 import SalesDashboard from './SalesDashboardV4.tsx';
+import MenuDashboard from './MenuDashboard.tsx';
 import './index.css';
 
-type RouteName = 'form' | 'dashboard' | 'dashboard_sales';
+type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu';
 
 function resolveRoute(): RouteName {
   const searchParams = new URLSearchParams(window.location.search);
@@ -14,6 +15,10 @@ function resolveRoute(): RouteName {
     .replace(/^#\/?/, '')
     .replace(/\?.*$/, '')
     .trim();
+
+  if (viewParam === 'dashboard_menu' || hash === 'dashboard_menu') {
+    return 'dashboard_menu';
+  }
 
   if (viewParam === 'dashboard_sales' || hash === 'dashboard_sales') {
     return 'dashboard_sales';
@@ -39,6 +44,7 @@ function RouteRoot() {
     };
   }, []);
 
+  if (route === 'dashboard_menu') return <MenuDashboard />;
   if (route === 'dashboard_sales') return <SalesDashboard />;
   if (route === 'dashboard') return <Dashboard />;
   return <App />;
