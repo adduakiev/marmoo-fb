@@ -1,6 +1,6 @@
-import { BarChart3, BrainCircuit, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, BrainCircuit, Clock3, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
 
-type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive';
+type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart';
 
 const items = [
   { key: 'dashboard_executive' as const, label: 'Executive', href: '#dashboard_executive', icon: BrainCircuit },
@@ -8,6 +8,7 @@ const items = [
   { key: 'dashboard_sales' as const, label: 'Sales BI', href: '#dashboard_sales', icon: BarChart3 },
   { key: 'dashboard_menu' as const, label: 'Menu Intelligence', href: '#dashboard_menu', icon: UtensilsCrossed },
   { key: 'dashboard_channels' as const, label: 'Channel Intelligence', href: '#dashboard_channels', icon: Radio },
+  { key: 'dashboard_daypart' as const, label: 'Daypart', href: '#dashboard_daypart', icon: Clock3 },
 ];
 
 export default function IntelligenceNav({ active }: { active: IntelligenceRoute }) {
@@ -21,24 +22,10 @@ export default function IntelligenceNav({ active }: { active: IntelligenceRoute 
             <div className="text-base font-black text-[#d8f4f2]">Intelligence Hub</div>
           </div>
         </div>
-
         <nav className="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
           {items.map(({ key, label, href, icon: Icon }) => {
             const selected = active === key;
-            return (
-              <a
-                key={key}
-                href={href}
-                className={`inline-flex min-w-max items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black transition ${
-                  selected
-                    ? 'border-[#cfeeed] bg-[#cfeeed] text-[#531027]'
-                    : 'border-white/10 bg-white/[.05] text-white/65 hover:border-white/25 hover:text-white'
-                }`}
-              >
-                <Icon size={16} />
-                {label}
-              </a>
-            );
+            return <a key={key} href={href} className={`inline-flex min-w-max items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black transition ${selected?'border-[#cfeeed] bg-[#cfeeed] text-[#531027]':'border-white/10 bg-white/[.05] text-white/65 hover:border-white/25 hover:text-white'}`}><Icon size={16}/>{label}</a>;
           })}
         </nav>
       </div>
