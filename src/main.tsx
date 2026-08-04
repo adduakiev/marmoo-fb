@@ -10,6 +10,7 @@ import DaypartDashboard from './DaypartDashboard.tsx';
 import WeekdayDashboard from './WeekdayDashboard.tsx';
 import CategoryDashboard from './CategoryDashboard.tsx';
 import IntelligenceNav from './components/IntelligenceNav.tsx';
+import { FilterProvider } from './context/FilterContext.tsx';
 import './index.css';
 
 type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday' | 'dashboard_categories';
@@ -53,4 +54,10 @@ function RouteRoot() {
   return <App/>;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><RouteRoot/></StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <FilterProvider>
+      <RouteRoot/>
+    </FilterProvider>
+  </StrictMode>
+);
