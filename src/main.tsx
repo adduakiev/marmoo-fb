@@ -10,6 +10,7 @@ import DaypartDashboard from './DaypartDashboard.tsx';
 import WeekdayDashboard from './WeekdayDashboard.tsx';
 import CategoryDashboard from './CategoryDashboard.tsx';
 import IntelligenceNav from './components/IntelligenceNav.tsx';
+import GlobalFilterBar from './components/GlobalFilterBar.tsx';
 import { FilterProvider } from './context/FilterContext.tsx';
 import './index.css';
 
@@ -32,7 +33,13 @@ function resolveRoute(): RouteName {
 }
 
 function IntelligenceShell({ route, children }: { route: IntelligenceRoute; children: React.ReactNode }) {
-  return <div className="min-h-screen bg-[#4c061c]"><IntelligenceNav active={route}/>{children}</div>;
+  return (
+    <div className="min-h-screen bg-[#4c061c]">
+      <IntelligenceNav active={route} />
+      <GlobalFilterBar />
+      {children}
+    </div>
+  );
 }
 
 function RouteRoot() {
@@ -41,23 +48,26 @@ function RouteRoot() {
     const syncRoute = () => setRoute(resolveRoute());
     window.addEventListener('hashchange', syncRoute);
     window.addEventListener('popstate', syncRoute);
-    return () => { window.removeEventListener('hashchange', syncRoute); window.removeEventListener('popstate', syncRoute); };
+    return () => {
+      window.removeEventListener('hashchange', syncRoute);
+      window.removeEventListener('popstate', syncRoute);
+    };
   }, []);
-  if (route === 'dashboard_categories') return <IntelligenceShell route={route}><CategoryDashboard/></IntelligenceShell>;
-  if (route === 'dashboard_weekday') return <IntelligenceShell route={route}><WeekdayDashboard/></IntelligenceShell>;
-  if (route === 'dashboard_daypart') return <IntelligenceShell route={route}><DaypartDashboard/></IntelligenceShell>;
-  if (route === 'dashboard_executive') return <IntelligenceShell route={route}><ExecutiveDashboard/></IntelligenceShell>;
-  if (route === 'dashboard_channels') return <IntelligenceShell route={route}><ChannelDashboard/></IntelligenceShell>;
-  if (route === 'dashboard_menu') return <IntelligenceShell route={route}><MenuDashboard/></IntelligenceShell>;
-  if (route === 'dashboard_sales') return <IntelligenceShell route={route}><SalesDashboard/></IntelligenceShell>;
-  if (route === 'dashboard') return <IntelligenceShell route={route}><Dashboard/></IntelligenceShell>;
-  return <App/>;
+  if (route === 'dashboard_categories') return <IntelligenceShell route={route}><CategoryDashboard /></IntelligenceShell>;
+  if (route === 'dashboard_weekday') return <IntelligenceShell route={route}><WeekdayDashboard /></IntelligenceShell>;
+  if (route === 'dashboard_daypart') return <IntelligenceShell route={route}><DaypartDashboard /></IntelligenceShell>;
+  if (route === 'dashboard_executive') return <IntelligenceShell route={route}><ExecutiveDashboard /></IntelligenceShell>;
+  if (route === 'dashboard_channels') return <IntelligenceShell route={route}><ChannelDashboard /></IntelligenceShell>;
+  if (route === 'dashboard_menu') return <IntelligenceShell route={route}><MenuDashboard /></IntelligenceShell>;
+  if (route === 'dashboard_sales') return <IntelligenceShell route={route}><SalesDashboard /></IntelligenceShell>;
+  if (route === 'dashboard') return <IntelligenceShell route={route}><Dashboard /></IntelligenceShell>;
+  return <App />;
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <FilterProvider>
-      <RouteRoot/>
+      <RouteRoot />
     </FilterProvider>
   </StrictMode>
 );
