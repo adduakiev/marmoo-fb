@@ -1,6 +1,6 @@
-import { BarChart3, BrainCircuit, Clock3, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, BrainCircuit, CalendarDays, Clock3, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
 
-type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart';
+type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday';
 
 const items = [
   { key: 'dashboard_executive' as const, label: 'Executive', href: '#dashboard_executive', icon: BrainCircuit },
@@ -9,6 +9,7 @@ const items = [
   { key: 'dashboard_menu' as const, label: 'Menu Intelligence', href: '#dashboard_menu', icon: UtensilsCrossed },
   { key: 'dashboard_channels' as const, label: 'Channel Intelligence', href: '#dashboard_channels', icon: Radio },
   { key: 'dashboard_daypart' as const, label: 'Daypart', href: '#dashboard_daypart', icon: Clock3 },
+  { key: 'dashboard_weekday' as const, label: 'Weekday', href: '#dashboard_weekday', icon: CalendarDays },
 ];
 
 export default function IntelligenceNav({ active }: { active: IntelligenceRoute }) {
