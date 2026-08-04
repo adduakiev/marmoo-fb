@@ -8,16 +8,18 @@ import ChannelDashboard from './ChannelDashboard.tsx';
 import ExecutiveDashboard from './ExecutiveDashboard.tsx';
 import DaypartDashboard from './DaypartDashboard.tsx';
 import WeekdayDashboard from './WeekdayDashboard.tsx';
+import CategoryDashboard from './CategoryDashboard.tsx';
 import IntelligenceNav from './components/IntelligenceNav.tsx';
 import './index.css';
 
-type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday';
+type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday' | 'dashboard_categories';
 type IntelligenceRoute = Exclude<RouteName, 'form'>;
 
 function resolveRoute(): RouteName {
   const searchParams = new URLSearchParams(window.location.search);
   const viewParam = searchParams.get('view');
   const hash = window.location.hash.replace(/^#\/?/, '').replace(/\?.*$/, '').trim();
+  if (viewParam === 'dashboard_categories' || hash === 'dashboard_categories') return 'dashboard_categories';
   if (viewParam === 'dashboard_weekday' || hash === 'dashboard_weekday') return 'dashboard_weekday';
   if (viewParam === 'dashboard_daypart' || hash === 'dashboard_daypart') return 'dashboard_daypart';
   if (viewParam === 'dashboard_executive' || hash === 'dashboard_executive') return 'dashboard_executive';
@@ -40,6 +42,7 @@ function RouteRoot() {
     window.addEventListener('popstate', syncRoute);
     return () => { window.removeEventListener('hashchange', syncRoute); window.removeEventListener('popstate', syncRoute); };
   }, []);
+  if (route === 'dashboard_categories') return <IntelligenceShell route={route}><CategoryDashboard/></IntelligenceShell>;
   if (route === 'dashboard_weekday') return <IntelligenceShell route={route}><WeekdayDashboard/></IntelligenceShell>;
   if (route === 'dashboard_daypart') return <IntelligenceShell route={route}><DaypartDashboard/></IntelligenceShell>;
   if (route === 'dashboard_executive') return <IntelligenceShell route={route}><ExecutiveDashboard/></IntelligenceShell>;
