@@ -20,6 +20,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   MARMOO_DATA_URL: https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec
   MARMOO_SALES_DATA_URL: https://script.google.com/macros/s/AKfycbz-ptK7zk4cVFNwCkjUhghPYlVCORiqyafmGtI9dvxqCOJIGV4K12dlhZq4OlaIO0yyzQ/exec
+  MARMOO_BI_SPREADSHEET_ID: 1EhKZ6oP95aXe3GL4iIDfGd5NmYbQPKIHat4Sml76TKo
 
 jobs:
   deploy:
@@ -138,6 +139,27 @@ jobs:
             `${payload.heatmap.length} operating-hour heatmap cells. ` +
             `Out-of-hours rows: ${payload.dataQuality.outOfHoursRows}`
           );
+          NODE
+
+      - name: Build Intelligence v2 snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp public
+          ORDERS_URL="https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1054385308"
+          ITEMS_URL="https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1526808551"
+
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "$ORDERS_URL" --output tmp/BI_ORDERS.csv
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "$ITEMS_URL" --output tmp/BI_ORDER_ITEMS.csv
+
+          npm run build:intelligence-data -- tmp/BI_ORDERS.csv tmp/BI_ORDER_ITEMS.csv public/intelligence-data.json
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('public/intelligence-data.json','utf8'));
+          if (Number(p.schemaVersion) !== 1) throw new Error('Invalid intelligence schema.');
+          if (!Array.isArray(p.basketPairs) || !Array.isArray(p.customerProfiles) || !Array.isArray(p.drinkAttachment) || !Array.isArray(p.heatmap)) throw new Error('Missing intelligence arrays.');
+          console.log(`Intelligence snapshot ready: ${p.source.validOrders} orders, ${p.basketPairs.length} basket pairs, ${p.customerProfiles.length} customers.`);
           NODE
 
       - name: Build Project
