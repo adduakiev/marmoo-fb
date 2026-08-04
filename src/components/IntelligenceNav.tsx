@@ -1,11 +1,12 @@
-import { BarChart3, MessageSquareText, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
 
-type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu';
+type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels';
 
 const items = [
   { key: 'dashboard' as const, label: 'Відгуки', href: '#dashboard', icon: MessageSquareText },
   { key: 'dashboard_sales' as const, label: 'Sales BI', href: '#dashboard_sales', icon: BarChart3 },
   { key: 'dashboard_menu' as const, label: 'Menu Intelligence', href: '#dashboard_menu', icon: UtensilsCrossed },
+  { key: 'dashboard_channels' as const, label: 'Channel Intelligence', href: '#dashboard_channels', icon: Radio },
 ];
 
 export default function IntelligenceNav({ active }: { active: IntelligenceRoute }) {
