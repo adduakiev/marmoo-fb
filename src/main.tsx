@@ -4,9 +4,11 @@ import App from './App.tsx';
 import Dashboard from './Dashboard.tsx';
 import SalesDashboard from './SalesDashboardV4.tsx';
 import MenuDashboard from './MenuDashboard.tsx';
+import IntelligenceNav from './components/IntelligenceNav.tsx';
 import './index.css';
 
 type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu';
+type IntelligenceRoute = Exclude<RouteName, 'form'>;
 
 function resolveRoute(): RouteName {
   const searchParams = new URLSearchParams(window.location.search);
@@ -16,19 +18,19 @@ function resolveRoute(): RouteName {
     .replace(/\?.*$/, '')
     .trim();
 
-  if (viewParam === 'dashboard_menu' || hash === 'dashboard_menu') {
-    return 'dashboard_menu';
-  }
-
-  if (viewParam === 'dashboard_sales' || hash === 'dashboard_sales') {
-    return 'dashboard_sales';
-  }
-
-  if (viewParam === 'dashboard' || hash === 'dashboard') {
-    return 'dashboard';
-  }
-
+  if (viewParam === 'dashboard_menu' || hash === 'dashboard_menu') return 'dashboard_menu';
+  if (viewParam === 'dashboard_sales' || hash === 'dashboard_sales') return 'dashboard_sales';
+  if (viewParam === 'dashboard' || hash === 'dashboard') return 'dashboard';
   return 'form';
+}
+
+function IntelligenceShell({ route, children }: { route: IntelligenceRoute; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-[#4c061c]">
+      <IntelligenceNav active={route} />
+      {children}
+    </div>
+  );
 }
 
 function RouteRoot() {
@@ -44,9 +46,15 @@ function RouteRoot() {
     };
   }, []);
 
-  if (route === 'dashboard_menu') return <MenuDashboard />;
-  if (route === 'dashboard_sales') return <SalesDashboard />;
-  if (route === 'dashboard') return <Dashboard />;
+  if (route === 'dashboard_menu') {
+    return <IntelligenceShell route={route}><MenuDashboard /></IntelligenceShell>;
+  }
+  if (route === 'dashboard_sales') {
+    return <IntelligenceShell route={route}><SalesDashboard /></IntelligenceShell>;
+  }
+  if (route === 'dashboard') {
+    return <IntelligenceShell route={route}><Dashboard /></IntelligenceShell>;
+  }
   return <App />;
 }
 
