@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState}from'react';
-import{BarChart3,RefreshCw,Star,Horse,Puzzle,Dog,ArrowLeft,TrendingUp,UtensilsCrossed}from'lucide-react';
+import{BarChart3,RefreshCw,Star,Trophy,Puzzle,Dog,ArrowLeft,UtensilsCrossed}from'lucide-react';
 import{Payload,PeriodKey,PERIODS,buildRange,inRange,money,num,pct,fullDate,shortDate}from'./sales/data';
 import{cleanProductRows,normalizeProductName}from'./sales/semantic';
 
@@ -7,7 +7,7 @@ type MenuRow={productName:string;category:string;quantity:number;revenue:number;
 const DATA_URL=`${import.meta.env.BASE_URL||'/'}sales-data.json`;
 const segmentMeta={
  Star:{label:'Stars',icon:Star,helper:'Високий попит · висока націнка',className:'border-emerald-200/20 bg-emerald-100/10 text-emerald-100'},
- 'Plow Horse':{label:'Plow Horses',icon:Horse,helper:'Високий попит · нижча націнка',className:'border-amber-200/20 bg-amber-100/10 text-amber-100'},
+ 'Plow Horse':{label:'Plow Horses',icon:Trophy,helper:'Високий попит · нижча націнка',className:'border-amber-200/20 bg-amber-100/10 text-amber-100'},
  Puzzle:{label:'Puzzles',icon:Puzzle,helper:'Низький попит · висока націнка',className:'border-sky-200/20 bg-sky-100/10 text-sky-100'},
  Dog:{label:'Dogs',icon:Dog,helper:'Низький попит · нижча націнка',className:'border-rose-200/20 bg-rose-100/10 text-rose-100'}
 }as const;
