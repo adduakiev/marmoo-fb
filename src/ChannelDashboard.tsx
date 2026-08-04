@@ -1,6 +1,5 @@
 import {useEffect,useMemo,useState} from 'react';
 import {RefreshCw,Radio,TrendingUp,ReceiptText,WalletCards} from 'lucide-react';
-import IntelligenceNav from './components/IntelligenceNav';
 import {Payload,PERIODS,PeriodKey,buildRange,inRange,money,num,pct,fullDate,shortDate} from './sales/data';
 
 type ChannelRow={channel:string;revenue:number;orders:number;markup:number;averageCheck:number;markupPercent:number;share:number};
@@ -15,7 +14,7 @@ export default function ChannelDashboard(){
  const totals=useMemo(()=>rows.reduce((a,x)=>({revenue:a.revenue+x.revenue,orders:a.orders+x.orders,markup:a.markup+x.markup}),{revenue:0,orders:0,markup:0}),[rows]);
  if(loading)return <div className="flex min-h-screen items-center justify-center bg-[#4d071e] text-white"><RefreshCw className="animate-spin"/></div>;
  if(!data)return <div className="flex min-h-screen items-center justify-center bg-[#4d071e]"><button onClick={load} className="rounded-xl bg-[#cfeeed] px-5 py-3 font-bold text-[#5b0b25]">Повторити</button></div>;
- return <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,#7d1640_0%,#580822_34%,#3c0417_100%)] text-white"><IntelligenceNav active="dashboard_channels"/><div className="mx-auto max-w-[1600px] px-4 py-7 md:px-8">
+ return <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,#7d1640_0%,#580822_34%,#3c0417_100%)] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 md:px-8">
   <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end"><div><p className="text-[10px] uppercase tracking-[.24em] text-white/45">MARMOO Intelligence</p><h1 className="mt-2 text-4xl font-black text-[#d8f4f2] md:text-5xl">Channel Intelligence</h1><p className="mt-3 text-sm font-semibold text-[#cfeeed]/75">{range.label}{range.from&&range.to?` · ${fullDate(range.from)} — ${fullDate(range.to)}`:` · ${shortDate(data.period.from)} — ${shortDate(data.period.to)}`}</p></div><button onClick={load} className="inline-flex self-start items-center gap-2 rounded-xl border border-white/10 bg-white/[.06] px-4 py-3 text-sm font-bold"><RefreshCw size={17}/> Оновити</button></header>
   <div className="mb-6 overflow-x-auto pb-2"><div className="flex min-w-max gap-2">{PERIODS.map(p=><button key={p.key} onClick={()=>setPeriod(p.key)} className={`rounded-xl border px-4 py-2.5 text-sm font-bold ${period===p.key?'border-[#cfeeed] bg-[#cfeeed] text-[#5b0b25]':'border-white/10 bg-white/[.05] text-white/65'}`}>{p.label}</button>)}</div></div>
   <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Kpi icon={WalletCards} label="Оборот" value={money(totals.revenue)}/><Kpi icon={ReceiptText} label="Чеки" value={num(totals.orders)}/><Kpi icon={TrendingUp} label="Середній чек" value={money(totals.orders?totals.revenue/totals.orders:0)}/><Kpi icon={Radio} label="Націнка" value={money(totals.markup)} sub={pct(totals.revenue?totals.markup/totals.revenue*100:0)}/></div>
