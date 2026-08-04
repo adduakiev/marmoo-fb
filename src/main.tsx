@@ -4,10 +4,11 @@ import App from './App.tsx';
 import Dashboard from './Dashboard.tsx';
 import SalesDashboard from './SalesDashboardV4.tsx';
 import MenuDashboard from './MenuDashboard.tsx';
+import ChannelDashboard from './ChannelDashboard.tsx';
 import IntelligenceNav from './components/IntelligenceNav.tsx';
 import './index.css';
 
-type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu';
+type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels';
 type IntelligenceRoute = Exclude<RouteName, 'form'>;
 
 function resolveRoute(): RouteName {
@@ -18,6 +19,7 @@ function resolveRoute(): RouteName {
     .replace(/\?.*$/, '')
     .trim();
 
+  if (viewParam === 'dashboard_channels' || hash === 'dashboard_channels') return 'dashboard_channels';
   if (viewParam === 'dashboard_menu' || hash === 'dashboard_menu') return 'dashboard_menu';
   if (viewParam === 'dashboard_sales' || hash === 'dashboard_sales') return 'dashboard_sales';
   if (viewParam === 'dashboard' || hash === 'dashboard') return 'dashboard';
@@ -46,6 +48,9 @@ function RouteRoot() {
     };
   }, []);
 
+  if (route === 'dashboard_channels') {
+    return <IntelligenceShell route={route}><ChannelDashboard /></IntelligenceShell>;
+  }
   if (route === 'dashboard_menu') {
     return <IntelligenceShell route={route}><MenuDashboard /></IntelligenceShell>;
   }
