@@ -1,8 +1,9 @@
-import { BarChart3, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, BrainCircuit, MessageSquareText, Radio, UtensilsCrossed } from 'lucide-react';
 
-type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels';
+type IntelligenceRoute = 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive';
 
 const items = [
+  { key: 'dashboard_executive' as const, label: 'Executive', href: '#dashboard_executive', icon: BrainCircuit },
   { key: 'dashboard' as const, label: 'Відгуки', href: '#dashboard', icon: MessageSquareText },
   { key: 'dashboard_sales' as const, label: 'Sales BI', href: '#dashboard_sales', icon: BarChart3 },
   { key: 'dashboard_menu' as const, label: 'Menu Intelligence', href: '#dashboard_menu', icon: UtensilsCrossed },
