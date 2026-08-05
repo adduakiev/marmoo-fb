@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import FeedbackDashboard from './FeedbackDashboardGlobal.tsx';
@@ -33,7 +33,7 @@ function resolveRoute(): RouteName {
   return 'form';
 }
 
-function IntelligenceShell({ route, children }: { route: IntelligenceRoute; children: React.ReactNode }) {
+function IntelligenceShell({ route, children }: { route: IntelligenceRoute; children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#4c061c]">
       <IntelligenceNav active={route} />
