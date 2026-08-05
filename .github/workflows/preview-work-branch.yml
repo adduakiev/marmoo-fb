@@ -17,7 +17,7 @@ env:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -76,6 +76,27 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: /marmoo-fb/data.json
+
+      - name: Install Chromium for smoke tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Start preview server
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/marmoo-preview.log 2>&1 &
+          echo $! > /tmp/marmoo-preview.pid
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/marmoo-fb/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/marmoo-preview.log
+          exit 1
+
+      - name: Browser smoke test
+        run: node scripts/smoke-preview.mjs
+        env:
+          PREVIEW_URL: http://127.0.0.1:4173/marmoo-fb/
 
       - name: Upload preview artifact
         uses: actions/upload-artifact@v4
