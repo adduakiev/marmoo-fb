@@ -6,6 +6,9 @@ export interface FilterState{
   compareLFL:boolean;
   selectedChannels:string[];
   selectedCategories:string[];
+  selectedProducts:string[];
+  selectedDates:string[];
+  selectedHours:number[];
   normalizeProducts:boolean;
   hideServiceItems:boolean;
   searchQuery:string;
@@ -17,29 +20,42 @@ interface FilterContextType{
   resetFilters:()=>void;
   toggleChannel:(channel:string)=>void;
   toggleCategory:(category:string)=>void;
+  toggleProduct:(product:string)=>void;
+  toggleDate:(date:string)=>void;
+  toggleHour:(hour:number)=>void;
+  clearCrossFilters:()=>void;
 }
 
-const STORAGE_KEY='marmoo-intelligence-filters-v2';
+const STORAGE_KEY='marmoo-intelligence-filters-v3';
 const initialFilters:FilterState={
   period:'30d',
   compareLFL:true,
   selectedChannels:[],
   selectedCategories:[],
+  selectedProducts:[],
+  selectedDates:[],
+  selectedHours:[],
   normalizeProducts:true,
   hideServiceItems:true,
   searchQuery:''
 };
 
+function list<T>(value:unknown):T[]{return Array.isArray(value)?value as T[]:[]}
+function toggle<T>(items:T[],value:T){return items.includes(value)?items.filter(item=>item!==value):[...items,value]}
+
 function loadInitialFilters():FilterState{
   try{
     const raw=window.localStorage.getItem(STORAGE_KEY);
     if(!raw)return initialFilters;
-    const saved=JSON.parse(raw) as Partial<FilterState>;
+    const saved=JSON.parse(raw)as Partial<FilterState>;
     return{
       ...initialFilters,
       ...saved,
-      selectedChannels:Array.isArray(saved.selectedChannels)?saved.selectedChannels:[],
-      selectedCategories:Array.isArray(saved.selectedCategories)?saved.selectedCategories:[]
+      selectedChannels:list<string>(saved.selectedChannels),
+      selectedCategories:list<string>(saved.selectedCategories),
+      selectedProducts:list<string>(saved.selectedProducts),
+      selectedDates:list<string>(saved.selectedDates),
+      selectedHours:list<number>(saved.selectedHours).map(Number).filter(Number.isFinite)
     };
   }catch{return initialFilters}
 }
@@ -60,18 +76,12 @@ export function FilterProvider({children}:{children:ReactNode}){
       setFilters(initialFilters);
       try{window.localStorage.removeItem(STORAGE_KEY)}catch{}
     },
-    toggleChannel:(channel:string)=>setFilters(prev=>({
-      ...prev,
-      selectedChannels:prev.selectedChannels.includes(channel)
-        ?prev.selectedChannels.filter(item=>item!==channel)
-        :[...prev.selectedChannels,channel]
-    })),
-    toggleCategory:(category:string)=>setFilters(prev=>({
-      ...prev,
-      selectedCategories:prev.selectedCategories.includes(category)
-        ?prev.selectedCategories.filter(item=>item!==category)
-        :[...prev.selectedCategories,category]
-    }))
+    toggleChannel:(channel:string)=>setFilters(prev=>({...prev,selectedChannels:toggle(prev.selectedChannels,channel)})),
+    toggleCategory:(category:string)=>setFilters(prev=>({...prev,selectedCategories:toggle(prev.selectedCategories,category)})),
+    toggleProduct:(product:string)=>setFilters(prev=>({...prev,selectedProducts:toggle(prev.selectedProducts,product)})),
+    toggleDate:(date:string)=>setFilters(prev=>({...prev,selectedDates:toggle(prev.selectedDates,date)})),
+    toggleHour:(hour:number)=>setFilters(prev=>({...prev,selectedHours:toggle(prev.selectedHours,hour)})),
+    clearCrossFilters:()=>setFilters(prev=>({...prev,selectedChannels:[],selectedCategories:[],selectedProducts:[],selectedDates:[],selectedHours:[]}))
   }),[filters]);
 
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
