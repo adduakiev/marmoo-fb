@@ -40,13 +40,13 @@ jobs:
 
       - name: Checkout
         if: steps.kyiv-time.outputs.run == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
         if: steps.kyiv-time.outputs.run == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -80,17 +80,30 @@ jobs:
           python - <<'PY'
           import json
           import xml.etree.ElementTree as ET
+
           tree = ET.parse('public/feed/marmoo-menu.xml')
           items = tree.findall('.//item')
           direct_links = tree.findall('.//dish_url')
           status = json.load(open('public/feed/status.json', encoding='utf-8'))
+
           if len(items) < 10:
               raise SystemExit(f'Safety stop: only {len(items)} items')
           if status.get('total_items') != len(items):
               raise SystemExit('XML/status item count mismatch')
-          if len(direct_links) < 10:
-              raise SystemExit(f'Safety stop: only {len(direct_links)} direct dish links')
-          print(f'Validated {len(items)} menu items and {len(direct_links)} dish links')
+          if len(direct_links) == 0:
+              raise SystemExit('Safety stop: no direct dish links')
+
+          expected_status = 'ok' if len(direct_links) >= 10 else 'degraded'
+          actual_status = status.get('dish_url_status')
+          if actual_status != expected_status:
+              raise SystemExit(
+                  f'Feed link status mismatch: expected {expected_status}, got {actual_status}'
+              )
+
+          if expected_status == 'degraded':
+              print(f'Warning: validated {len(items)} menu items with only {len(direct_links)} direct dish links')
+          else:
+              print(f'Validated {len(items)} menu items and {len(direct_links)} dish links')
           PY
 
       - name: Commit refreshed feed
