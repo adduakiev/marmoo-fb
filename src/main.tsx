@@ -38,7 +38,7 @@ function IntelligenceShell({ route, children }: { route: IntelligenceRoute; chil
   return (
     <div className="min-h-screen bg-[#4c061c]">
       <IntelligenceNav active={route} />
-      <GlobalFilterBar />
+      <GlobalFilterBar route={route} />
       {children}
     </div>
   );
