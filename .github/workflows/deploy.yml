@@ -17,7 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   MARMOO_DATA_URL: https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec
   MARMOO_SALES_DATA_URL: https://script.google.com/macros/s/AKfycbz-ptK7zk4cVFNwCkjUhghPYlVCORiqyafmGtI9dvxqCOJIGV4K12dlhZq4OlaIO0yyzQ/exec
   MARMOO_BI_SPREADSHEET_ID: 1EhKZ6oP95aXe3GL4iIDfGd5NmYbQPKIHat4Sml76TKo
@@ -28,15 +27,17 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -74,15 +75,12 @@ jobs:
           CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
           FRESH_URL="${MARMOO_SALES_DATA_URL}?_=${CACHE_BUST}"
 
-          echo "Fetching fresh Sales snapshot..."
-
           if ! curl --fail --location --silent --show-error \
             --retry 2 --retry-delay 5 \
             --header "Cache-Control: no-cache, no-store, max-age=0" \
             --header "Pragma: no-cache" \
             "$FRESH_URL" \
             --output public/sales-data.json; then
-            echo "Fresh URL returned an error. Retrying the base Apps Script URL..."
             sleep 5
             curl --fail --location --silent --show-error \
               --retry 5 --retry-delay 10 --retry-all-errors \
@@ -92,32 +90,20 @@ jobs:
 
           node - <<'NODE'
           const fs = require('fs');
-          const path = 'public/sales-data.json';
-          const raw = fs.readFileSync(path, 'utf8').trim();
-
-          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
-            throw new Error('Sales Apps Script returned HTML instead of JSON.');
-          }
-
+          const file = 'public/sales-data.json';
+          const raw = fs.readFileSync(file, 'utf8').trim();
+          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) throw new Error('Sales Apps Script returned HTML instead of JSON.');
           const payload = JSON.parse(raw);
-          if (payload.ok === false) {
-            throw new Error(`Sales API error: ${payload.error || 'unknown error'}`);
-          }
-          if (Number(payload.schemaVersion) !== 2) {
-            throw new Error(`Invalid Sales schema: expected schemaVersion 2, received ${payload.schemaVersion ?? 'missing'}`);
-          }
-
-          const requiredArrays = ['daily','channels','channelsDaily','hourly','hourlyDaily','products','productsDaily','heatmap'];
-          if (!payload.summary) throw new Error('Invalid Sales BI payload: summary is missing.');
-          for (const key of requiredArrays) {
-            if (!Array.isArray(payload[key])) throw new Error(`Invalid Sales BI payload: expected ${key}[].`);
-          }
+          if (payload.ok === false) throw new Error(`Sales API error: ${payload.error || 'unknown error'}`);
+          if (Number(payload.schemaVersion) !== 2) throw new Error(`Invalid Sales schema: ${payload.schemaVersion ?? 'missing'}`);
+          const required = ['daily','channels','channelsDaily','hourly','hourlyDaily','products','productsDaily','heatmap'];
+          if (!payload.summary) throw new Error('Sales summary is missing.');
+          for (const key of required) if (!Array.isArray(payload[key])) throw new Error(`Expected ${key}[].`);
 
           const OPEN_HOUR = 10;
           const CLOSE_HOUR = 22;
           const allHourlyDaily = payload.hourlyDaily;
           const outOfHours = allHourlyDaily.filter(item => Number(item.hour) < OPEN_HOUR || Number(item.hour) > CLOSE_HOUR);
-
           payload.operatingHours = { open: OPEN_HOUR, close: CLOSE_HOUR };
           payload.dataQuality = {
             ...(payload.dataQuality || {}),
@@ -125,23 +111,14 @@ jobs:
             outOfHoursRevenue: Math.round(outOfHours.reduce((sum, item) => sum + Number(item.revenue || 0), 0) * 100) / 100,
             outOfHoursOrders: outOfHours.reduce((sum, item) => sum + Number(item.orders || 0), 0)
           };
-
           payload.hourlyDaily = allHourlyDaily.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
           payload.hourly = payload.hourly.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
           payload.heatmap = payload.heatmap.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
-
-          fs.writeFileSync(path, JSON.stringify(payload));
-
-          console.log(
-            `Loaded Sales schema v${payload.schemaVersion}: ` +
-            `${payload.summary.orders || 0} orders, ` +
-            `${payload.daily.length} days, ${payload.products.length} products, ` +
-            `${payload.heatmap.length} operating-hour heatmap cells. ` +
-            `Out-of-hours rows: ${payload.dataQuality.outOfHoursRows}`
-          );
+          fs.writeFileSync(file, JSON.stringify(payload));
+          console.log(`Sales snapshot OK: ${payload.summary.orders || 0} orders, ${payload.daily.length} days.`);
           NODE
 
-      - name: Build Intelligence v2 snapshot
+      - name: Build Intelligence snapshot
         shell: bash
         run: |
           set -euo pipefail
@@ -151,7 +128,6 @@ jobs:
 
           curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "$ORDERS_URL" --output tmp/BI_ORDERS.csv
           curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "$ITEMS_URL" --output tmp/BI_ORDER_ITEMS.csv
-
           npm run build:intelligence-data -- tmp/BI_ORDERS.csv tmp/BI_ORDER_ITEMS.csv public/intelligence-data.json
 
           node - <<'NODE'
@@ -159,8 +135,14 @@ jobs:
           const p = JSON.parse(fs.readFileSync('public/intelligence-data.json','utf8'));
           if (Number(p.schemaVersion) !== 1) throw new Error('Invalid intelligence schema.');
           if (!Array.isArray(p.basketPairs) || !Array.isArray(p.customerProfiles) || !Array.isArray(p.drinkAttachment) || !Array.isArray(p.heatmap)) throw new Error('Missing intelligence arrays.');
-          console.log(`Intelligence snapshot ready: ${p.source.validOrders} orders, ${p.basketPairs.length} basket pairs, ${p.customerProfiles.length} customers.`);
+          if (!p.dataQuality?.revenueControlPassed) throw new Error('Revenue control failed.');
+          if (p.dataQuality?.publicPhoneFieldsExposed) throw new Error('Public phone fields exposed.');
+          if (p.customerProfiles.some(x => 'phone' in x)) throw new Error('Phone field found in customerProfiles.');
+          console.log(`Intelligence snapshot OK: ${p.source.validOrders} orders, ${p.customerProfiles.length} customers.`);
           NODE
+
+      - name: TypeScript check
+        run: npm run lint
 
       - name: Build Project
         run: npm run build
