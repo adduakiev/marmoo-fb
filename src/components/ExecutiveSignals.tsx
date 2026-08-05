@@ -8,18 +8,7 @@ import {useFilters} from '../context/FilterContext';
 
 type Priority='high'|'medium'|'low';
 type Kind='risk'|'warning'|'opportunity'|'positive';
-type Signal={
- id:string;
- title:string;
- detail:string;
- action:string;
- source:string;
- priority:Priority;
- kind:Kind;
- score:number;
- impact?:string;
- icon:any;
-};
+type Signal={id:string;title:string;detail:string;action:string;source:string;priority:Priority;kind:Kind;score:number;impact?:string;icon:any};
 type Aggregate={revenue:number;orders:number;markup:number;averageCheck:number;markupPercent:number};
 type ProductTrend={name:string;category:string;revenue:number;markup:number;quantity:number;previousRevenue:number;change:number|null};
 type ChannelTrend={channel:string;revenue:number;markup:number;orders:number;previousRevenue:number;change:number|null;markupPercent:number};
@@ -47,9 +36,9 @@ export default function ExecutiveSignals(){
     else if(revenueChange!==null&&revenueChange>=8)result.push({id:'revenue-growth',title:'Сильне зростання обороту',detail:`Оборот зріс на ${revenueChange.toFixed(1)}%.`,action:'Зафіксувати канали та позиції, які дали приріст, і масштабувати механіку.',source:'Продажі',priority:'medium',kind:'positive',score:50+revenueChange,impact:money(current.revenue-previous.revenue),icon:TrendingUp});
     if(ordersChange!==null&&ordersChange<-8)result.push({id:'orders-drop',title:'Падає кількість чеків',detail:`Чеків стало менше на ${Math.abs(ordersChange).toFixed(1)}%.`,action:'Перевірити трафік, доступність каналів, години роботи та відмови.',source:'Продажі',priority:ordersChange<=-15?'high':'medium',kind:'risk',score:88+Math.abs(ordersChange),icon:ShoppingBasket});
     if(checkChange!==null&&checkChange<-5)result.push({id:'check-drop',title:'Просідає середній чек',detail:`Середній чек знизився на ${Math.abs(checkChange).toFixed(1)}%.`,action:'Посилити допродажі, комбо та рекомендації напоїв до основних страв.',source:'Продажі',priority:'medium',kind:'warning',score:78+Math.abs(checkChange),impact:money(current.averageCheck),icon:ShoppingBasket});
-    if(markupChange!==null&&markupChange<revenueChange!-5)result.push({id:'markup-lag',title:'Націнка відстає від обороту',detail:`Оборот змінився на ${revenueChange?.toFixed(1)}%, а націнка — на ${markupChange.toFixed(1)}%.`,action:'Перевірити структуру продажів, знижки та частку низькомаржинальних позицій.',source:'Маржинальність',priority:'high',kind:'risk',score:94+Math.abs(markupChange-revenueChange!),icon:AlertTriangle});
+    if(markupChange!==null&&revenueChange!==null&&markupChange<revenueChange-5)result.push({id:'markup-lag',title:'Націнка відстає від обороту',detail:`Оборот змінився на ${revenueChange.toFixed(1)}%, а націнка — на ${markupChange.toFixed(1)}%.`,action:'Перевірити структуру продажів, знижки та частку низькомаржинальних позицій.',source:'Маржинальність',priority:'high',kind:'risk',score:94+Math.abs(markupChange-revenueChange),icon:AlertTriangle});
    }
-   const productMap=(from:string|null,to:string|null)=>{const map=new Map<string,{name:string;category:string;revenue:number;markup:number;quantity:number}>();cleanProductRows(sales.productsDaily.filter(row=>inRange(row.date,from,to)) as any).forEach((row:any)=>{const name=normalizeProductName(row.productName),key=name.toLowerCase(),category=String(row.category||'Без категорії').trim()||'Без категорії';const current=map.get(key)||{name,category,revenue:0,markup:0,quantity:0};current.revenue+=Number(row.revenue)||0;current.markup+=Number(row.markup)||0;current.quantity+=Number(row.quantity)||0;map.set(key,current)});return map};
+   const productMap=(from:Date|null,to:Date|null)=>{const map=new Map<string,{name:string;category:string;revenue:number;markup:number;quantity:number}>();cleanProductRows(sales.productsDaily.filter(row=>inRange(row.date,from,to)) as any).forEach((row:any)=>{const name=normalizeProductName(row.productName),key=name.toLowerCase(),category=String(row.category||'Без категорії').trim()||'Без категорії';const current=map.get(key)||{name,category,revenue:0,markup:0,quantity:0};current.revenue+=Number(row.revenue)||0;current.markup+=Number(row.markup)||0;current.quantity+=Number(row.quantity)||0;map.set(key,current)});return map};
    if(filters.compareLFL&&filters.period!=='all'){
     const currentProducts=productMap(range.from,range.to),previousProducts=productMap(range.comparisonFrom,range.comparisonTo);
     const trends:ProductTrend[]=[...currentProducts.values()].map(item=>{const previous=previousProducts.get(item.name.toLowerCase());return{...item,previousRevenue:previous?.revenue||0,change:change(item.revenue,previous?.revenue||0)}}).filter(item=>item.previousRevenue>=1000&&item.change!==null);
@@ -57,7 +46,7 @@ export default function ExecutiveSignals(){
     const strongest=trends.filter(item=>item.change!>=20).sort((a,b)=>b.change!-a.change!)[0];
     if(weakest)result.push({id:`product-${weakest.name}`,title:`Просідає страва: ${weakest.name}`,detail:`Оборот позиції впав на ${Math.abs(weakest.change!).toFixed(1)}%, поточний оборот — ${money(weakest.revenue)}.`,action:'Перевірити наявність, ціну, якість, фото, позицію в меню та рекомендацію персоналу.',source:`Страви · ${weakest.category}`,priority:weakest.change!<=-30?'high':'medium',kind:'risk',score:90+Math.abs(weakest.change!),impact:money(weakest.previousRevenue-weakest.revenue),icon:UtensilsCrossed});
     if(strongest)result.push({id:`product-growth-${strongest.name}`,title:`Росте страва: ${strongest.name}`,detail:`Оборот позиції зріс на ${strongest.change!.toFixed(1)}%.`,action:'Підсилити видимість, забезпечити стабільну наявність і перевірити потенціал комбо.',source:`Страви · ${strongest.category}`,priority:'low',kind:'opportunity',score:45+strongest.change!,impact:money(strongest.revenue-strongest.previousRevenue),icon:TrendingUp});
-    const channelMap=(from:string|null,to:string|null)=>{const map=new Map<string,{channel:string;revenue:number;markup:number;orders:number}>();sales.channelsDaily.filter(row=>inRange(row.date,from,to)).forEach(row=>{const channel=normalizeChannel(row.channel),current=map.get(channel)||{channel,revenue:0,markup:0,orders:0};current.revenue+=Number(row.revenue)||0;current.markup+=Number(row.markup)||0;current.orders+=Number(row.orders)||0;map.set(channel,current)});return map};
+    const channelMap=(from:Date|null,to:Date|null)=>{const map=new Map<string,{channel:string;revenue:number;markup:number;orders:number}>();sales.channelsDaily.filter(row=>inRange(row.date,from,to)).forEach(row=>{const channel=normalizeChannel(row.channel),current=map.get(channel)||{channel,revenue:0,markup:0,orders:0};current.revenue+=Number(row.revenue)||0;current.markup+=Number(row.markup)||0;current.orders+=Number(row.orders)||0;map.set(channel,current)});return map};
     const currentChannels=channelMap(range.from,range.to),previousChannels=channelMap(range.comparisonFrom,range.comparisonTo);
     const channelTrends:ChannelTrend[]=[...currentChannels.values()].map(item=>{const previous=previousChannels.get(item.channel);return{...item,previousRevenue:previous?.revenue||0,change:change(item.revenue,previous?.revenue||0),markupPercent:item.revenue?item.markup/item.revenue*100:0}}).filter(item=>item.previousRevenue>0&&item.change!==null);
     const weakestChannel=channelTrends.filter(item=>item.change!<=-10).sort((a,b)=>a.change!-b.change!)[0];
