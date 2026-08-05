@@ -1,5 +1,5 @@
 export type BasketPair={itemA:string;itemB:string;coOccurrence:number;support:number;confidenceAtoB:number;confidenceBtoA:number;lift:number};
-export type CustomerProfile={customerId:string;phone:string;ordersCount:number;totalSpend:number;averageCheck:number;firstOrderDate:string;lastOrderDate:string;recencyDays:number;channels:string[];rScore:number;fScore:number;mScore:number;rfmScore:string;segment:string};
+export type CustomerProfile={customerId:string;ordersCount:number;totalSpend:number;averageCheck:number;firstOrderDate:string;lastOrderDate:string;recencyDays:number;channels:string[];rScore:number;fScore:number;mScore:number;rfmScore:string;segment:string};
 export type DrinkAttachmentRow={channel:string;orders:number;ordersWithDrink:number;foodOnlyOrders:number;revenue:number;attachmentRate:number;foodOnlyRate:number};
 export type IntelligenceHeatmapCell={weekday:string;weekdayNumber:number;hour:number;orders:number;revenue:number;averageCheck:number};
 export type IntelligenceDataQuality={expectedRevenue:number;revenueTotal:number;revenueControlDelta:number;revenueControlPassed:boolean;totalOrders:number;validOrders:number;zeroRevenueOrders:number;duplicateOrderIds:number;missingDateOrders:number;identifiedOrders:number;uniqueCustomers:number;phoneCoverage:number;ambiguousPhoneOrders:number;publicPhoneFieldsExposed:boolean};
