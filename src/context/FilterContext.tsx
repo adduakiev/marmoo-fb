@@ -9,6 +9,7 @@ export interface FilterState{
   selectedProducts:string[];
   selectedDates:string[];
   selectedHours:number[];
+  selectedWeekdays:number[];
   normalizeProducts:boolean;
   hideServiceItems:boolean;
   searchQuery:string;
@@ -23,10 +24,12 @@ interface FilterContextType{
   toggleProduct:(product:string)=>void;
   toggleDate:(date:string)=>void;
   toggleHour:(hour:number)=>void;
+  toggleWeekday:(weekday:number)=>void;
+  toggleHeatCell:(weekday:number,hour:number)=>void;
   clearCrossFilters:()=>void;
 }
 
-const STORAGE_KEY='marmoo-intelligence-filters-v3';
+const STORAGE_KEY='marmoo-intelligence-filters-v4';
 const initialFilters:FilterState={
   period:'30d',
   compareLFL:true,
@@ -35,6 +38,7 @@ const initialFilters:FilterState={
   selectedProducts:[],
   selectedDates:[],
   selectedHours:[],
+  selectedWeekdays:[],
   normalizeProducts:true,
   hideServiceItems:true,
   searchQuery:''
@@ -55,7 +59,8 @@ function loadInitialFilters():FilterState{
       selectedCategories:list<string>(saved.selectedCategories),
       selectedProducts:list<string>(saved.selectedProducts),
       selectedDates:list<string>(saved.selectedDates),
-      selectedHours:list<number>(saved.selectedHours).map(Number).filter(Number.isFinite)
+      selectedHours:list<number>(saved.selectedHours).map(Number).filter(Number.isFinite),
+      selectedWeekdays:list<number>(saved.selectedWeekdays).map(Number).filter(x=>Number.isFinite(x)&&x>=1&&x<=7)
     };
   }catch{return initialFilters}
 }
@@ -81,7 +86,13 @@ export function FilterProvider({children}:{children:ReactNode}){
     toggleProduct:(product:string)=>setFilters(prev=>({...prev,selectedProducts:toggle(prev.selectedProducts,product)})),
     toggleDate:(date:string)=>setFilters(prev=>({...prev,selectedDates:toggle(prev.selectedDates,date)})),
     toggleHour:(hour:number)=>setFilters(prev=>({...prev,selectedHours:toggle(prev.selectedHours,hour)})),
-    clearCrossFilters:()=>setFilters(prev=>({...prev,selectedChannels:[],selectedCategories:[],selectedProducts:[],selectedDates:[],selectedHours:[]}))
+    toggleWeekday:(weekday:number)=>setFilters(prev=>({...prev,selectedWeekdays:toggle(prev.selectedWeekdays,weekday)})),
+    toggleHeatCell:(weekday:number,hour:number)=>setFilters(prev=>{
+      const active=prev.selectedWeekdays.includes(weekday)&&prev.selectedHours.includes(hour);
+      if(active)return{...prev,selectedWeekdays:prev.selectedWeekdays.filter(x=>x!==weekday),selectedHours:prev.selectedHours.filter(x=>x!==hour)};
+      return{...prev,selectedWeekdays:[weekday],selectedHours:[hour]};
+    }),
+    clearCrossFilters:()=>setFilters(prev=>({...prev,selectedChannels:[],selectedCategories:[],selectedProducts:[],selectedDates:[],selectedHours:[],selectedWeekdays:[]}))
   }),[filters]);
 
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
