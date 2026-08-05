@@ -11,6 +11,7 @@ import WeekdayDashboard from './WeekdayDashboard.tsx';
 import CategoryDashboard from './CategoryDashboard.tsx';
 import IntelligenceNav from './components/IntelligenceNav.tsx';
 import GlobalFilterBar from './components/GlobalFilterBar.tsx';
+import ExecutiveSignals from './components/ExecutiveSignals.tsx';
 import { FilterProvider } from './context/FilterContext.tsx';
 import './index.css';
 
@@ -56,7 +57,7 @@ function RouteRoot() {
   if (route === 'dashboard_categories') return <IntelligenceShell route={route}><CategoryDashboard /></IntelligenceShell>;
   if (route === 'dashboard_weekday') return <IntelligenceShell route={route}><WeekdayDashboard /></IntelligenceShell>;
   if (route === 'dashboard_daypart') return <IntelligenceShell route={route}><DaypartDashboard /></IntelligenceShell>;
-  if (route === 'dashboard_executive') return <IntelligenceShell route={route}><ExecutiveDashboard /></IntelligenceShell>;
+  if (route === 'dashboard_executive') return <IntelligenceShell route={route}><ExecutiveDashboard /><ExecutiveSignals /></IntelligenceShell>;
   if (route === 'dashboard_channels') return <IntelligenceShell route={route}><ChannelDashboard /></IntelligenceShell>;
   if (route === 'dashboard_menu') return <IntelligenceShell route={route}><MenuDashboard /></IntelligenceShell>;
   if (route === 'dashboard_sales') return <IntelligenceShell route={route}><SalesDashboard /></IntelligenceShell>;
