@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import Dashboard from './Dashboard.tsx';
-import SalesDashboard from './SalesDashboardV4.tsx';
+import SalesDashboard from './SalesDashboardGlobal.tsx';
 import MenuDashboard from './MenuDashboard.tsx';
 import ChannelDashboard from './ChannelDashboard.tsx';
 import ExecutiveDashboard from './ExecutiveDashboard.tsx';
