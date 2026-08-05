@@ -1,4 +1,4 @@
-import React,{createContext,useContext,useMemo,useState,type ReactNode}from'react';
+import React,{createContext,useContext,useEffect,useMemo,useState,type ReactNode}from'react';
 import type{PeriodKey}from'../sales/data';
 
 export interface FilterState{
@@ -19,6 +19,7 @@ interface FilterContextType{
   toggleCategory:(category:string)=>void;
 }
 
+const STORAGE_KEY='marmoo-intelligence-filters-v2';
 const initialFilters:FilterState={
   period:'30d',
   compareLFL:true,
@@ -29,15 +30,36 @@ const initialFilters:FilterState={
   searchQuery:''
 };
 
+function loadInitialFilters():FilterState{
+  try{
+    const raw=window.localStorage.getItem(STORAGE_KEY);
+    if(!raw)return initialFilters;
+    const saved=JSON.parse(raw) as Partial<FilterState>;
+    return{
+      ...initialFilters,
+      ...saved,
+      selectedChannels:Array.isArray(saved.selectedChannels)?saved.selectedChannels:[],
+      selectedCategories:Array.isArray(saved.selectedCategories)?saved.selectedCategories:[]
+    };
+  }catch{return initialFilters}
+}
+
 const FilterContext=createContext<FilterContextType|undefined>(undefined);
 
 export function FilterProvider({children}:{children:ReactNode}){
-  const[filters,setFilters]=useState<FilterState>(initialFilters);
+  const[filters,setFilters]=useState<FilterState>(loadInitialFilters);
+
+  useEffect(()=>{
+    try{window.localStorage.setItem(STORAGE_KEY,JSON.stringify(filters))}catch{}
+  },[filters]);
 
   const value=useMemo<FilterContextType>(()=>({
     filters,
     setFilters,
-    resetFilters:()=>setFilters(initialFilters),
+    resetFilters:()=>{
+      setFilters(initialFilters);
+      try{window.localStorage.removeItem(STORAGE_KEY)}catch{}
+    },
     toggleChannel:(channel:string)=>setFilters(prev=>({
       ...prev,
       selectedChannels:prev.selectedChannels.includes(channel)
