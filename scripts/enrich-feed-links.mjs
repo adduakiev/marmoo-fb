@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 
-// Link matcher v1.3.1: direct ChoiceQR dish pages only.
+// Link matcher v1.3.2: direct ChoiceQR dish pages only.
 const FEED_PATH = process.env.MARMOO_FEED_PATH || 'public/feed/marmoo-menu.xml';
 const STATUS_PATH = process.env.MARMOO_FEED_STATUS_PATH || 'public/feed/status.json';
 const SITEMAP_URL = process.env.MARMOO_SITEMAP_URL || 'https://marmooolymp.choiceqr.com/sitemap.xml';
@@ -106,7 +106,12 @@ async function main() {
     return `<item ${attrs}>${body}</item>`;
   });
 
-  if (matched < 10) throw new Error(`Safety stop: only ${matched} direct dish URLs matched`);
+  // A total matcher failure is unsafe. A partial ChoiceQR sitemap is degraded,
+  // but must not block the independent BI application deployment.
+  if (matched === 0) throw new Error('Safety stop: no direct dish URLs matched');
+  const degraded = matched < 10;
+  if (degraded) console.warn(`Feed link warning: only ${matched} direct dish URLs matched; continuing in degraded mode`);
+
   await fs.writeFile(FEED_PATH, feed, 'utf8');
 
   let status = {};
@@ -117,10 +122,12 @@ async function main() {
     dish_urls_matched: matched,
     dish_urls_unmatched: unmatched,
     dish_urls_updated_at: new Date().toISOString(),
+    dish_url_status: degraded ? 'degraded' : 'ok',
+    dish_url_warning: degraded ? `Only ${matched} direct dish URLs matched` : null,
     dish_url_rule: 'Only /section:<section>/<dish> direct pages are accepted'
   });
   await fs.writeFile(STATUS_PATH, JSON.stringify(status, null, 2) + '\n', 'utf8');
-  console.log({ direct_urls: urls.length, matched, unmatched });
+  console.log({ direct_urls: urls.length, matched, unmatched, status: degraded ? 'degraded' : 'ok' });
 }
 
 main().catch(error => { console.error(error.stack || error); process.exit(1); });
