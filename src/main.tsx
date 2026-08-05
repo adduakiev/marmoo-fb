@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
-import Dashboard from './Dashboard.tsx';
+import FeedbackDashboard from './FeedbackDashboardGlobal.tsx';
 import SalesDashboard from './SalesDashboardGlobal.tsx';
 import MenuDashboard from './MenuDashboard.tsx';
 import ChannelDashboard from './ChannelDashboard.tsx';
@@ -61,7 +61,7 @@ function RouteRoot() {
   if (route === 'dashboard_channels') return <IntelligenceShell route={route}><ChannelDashboard /></IntelligenceShell>;
   if (route === 'dashboard_menu') return <IntelligenceShell route={route}><MenuDashboard /></IntelligenceShell>;
   if (route === 'dashboard_sales') return <IntelligenceShell route={route}><SalesDashboard /></IntelligenceShell>;
-  if (route === 'dashboard') return <IntelligenceShell route={route}><Dashboard /></IntelligenceShell>;
+  if (route === 'dashboard') return <IntelligenceShell route={route}><FeedbackDashboard /></IntelligenceShell>;
   return <App />;
 }
 
