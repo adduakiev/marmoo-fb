@@ -1,0 +1,106 @@
+name: Build MARMOO BI Preview Artifact
+
+on:
+  push:
+    branches:
+      - work/nova-hvylia-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MARMOO_DATA_URL: https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec
+  MARMOO_SALES_DATA_URL: https://script.google.com/macros/s/AKfycbz-ptK7zk4cVFNwCkjUhghPYlVCORiqyafmGtI9dvxqCOJIGV4K12dlhZq4OlaIO0yyzQ/exec
+  MARMOO_BI_SPREADSHEET_ID: 1EhKZ6oP95aXe3GL4iIDfGd5NmYbQPKIHat4Sml76TKo
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Fetch feedback snapshot
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 \
+            "${MARMOO_DATA_URL}?_=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --output public/data.json
+          node -e "const p=require('./public/data.json');if(!Array.isArray(p.general)||!Array.isArray(p.dishes))throw Error('Invalid feedback snapshot')"
+
+      - name: Fetch sales snapshot
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 \
+            "${MARMOO_SALES_DATA_URL}?_=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --output public/sales-data.json
+          node -e "const p=require('./public/sales-data.json');if(Number(p.schemaVersion)!==2)throw Error('Invalid sales schema')"
+
+      - name: Build intelligence snapshot
+        run: |
+          set -euo pipefail
+          mkdir -p tmp public
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 \
+            "https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1054385308" \
+            --output tmp/BI_ORDERS.csv
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 \
+            "https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1526808551" \
+            --output tmp/BI_ORDER_ITEMS.csv
+          npm run build:intelligence-data -- tmp/BI_ORDERS.csv tmp/BI_ORDER_ITEMS.csv public/intelligence-data.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('public/intelligence-data.json','utf8'));
+          if(!p.dataQuality?.revenueControlPassed) throw new Error('Revenue control failed');
+          if(p.dataQuality?.publicPhoneFieldsExposed) throw new Error('Public phone fields exposed');
+          if(p.customerProfiles.some(x=>'phone' in x)) throw new Error('Phone field found in customerProfiles');
+          console.log(`Preview data OK: ${p.source.validOrders} orders, ${p.customerProfiles.length} customers`);
+          NODE
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+        env:
+          VITE_API_URL: /marmoo-fb/data.json
+
+      - name: Install Chromium for smoke tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Start preview server
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/marmoo-preview.log 2>&1 &
+          echo $! > /tmp/marmoo-preview.pid
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/marmoo-fb/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/marmoo-preview.log
+          exit 1
+
+      - name: Browser smoke test
+        run: node scripts/smoke-preview.mjs
+        env:
+          PREVIEW_URL: http://127.0.0.1:4173/marmoo-fb/
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: marmoo-bi-preview-${{ github.run_number }}
+          path: dist
+          retention-days: 7
