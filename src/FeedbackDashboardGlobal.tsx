@@ -1,0 +1,42 @@
+import {useEffect,useMemo,useState} from 'react';
+import {MessageSquareText,RefreshCw,Star,Target,TrendingUp,Users} from 'lucide-react';
+import {buildRange,inRange,fullDate,num,pct} from './sales/data';
+import {useFilters} from './context/FilterContext';
+
+type Row=Record<string,unknown>;
+const API_URL=import.meta.env.VITE_API_URL||'https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec';
+const pick=(r:Row,keys:string[])=>{for(const key of keys){const value=r[key];if(value!==undefined&&value!==null&&value!=='')return value}return null};
+const text=(r:Row,keys:string[])=>String(pick(r,keys)??'').trim();
+const number=(r:Row,keys:string[])=>{const value=pick(r,keys);const n=Number(String(value??'').replace(',','.'));return Number.isFinite(n)?n:null};
+const parseFeedbackDate=(value:unknown)=>{const raw=String(value??'').trim();const match=raw.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);if(match)return `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;const d=new Date(raw);return Number.isNaN(d.getTime())?'':d.toISOString().slice(0,10)};
+const DATE_KEYS=['Timestamp','Date'];
+const NPS_KEYS=['NPS Score (q16)','Q16_NPS'];
+const TOTAL_KEYS=['Total Score (q1)','Q1_General'];
+const SERVICE_KEYS=['Service Rating (q5)','Q5_Service_Rating'];
+const TASTE_KEYS=['Food Taste (q8)','Q8_Food_Taste'];
+const RETURN_KEYS=['Will Return (q15)','Q15_Return_Intent'];
+const COMMENT_KEYS=['User Comment (q17)','Q17_Comments'];
+const CRITICAL_KEYS=['CRITICAL FIX (q14)','Q14_Priority_Fix'];
+
+export default function FeedbackDashboardGlobal(){
+ const[data,setData]=useState<{general:Row[];dishes:Row[]}>({general:[],dishes:[]}),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const{filters}=useFilters();
+ const load=async()=>{setLoading(true);setError('');try{const response=await fetch(`${API_URL}${API_URL.includes('?')?'&':'?'}_=${Date.now()}`,{cache:'no-store'});if(!response.ok)throw Error(`HTTP ${response.status}`);const json=await response.json();setData({general:Array.isArray(json.general)?json.general:[],dishes:Array.isArray(json.dishes)?json.dishes:[]})}catch(e){console.error(e);setError('Не вдалося завантажити відгуки.')}finally{setLoading(false)}};
+ useEffect(()=>{load()},[]);
+ const latestDate=useMemo(()=>{const dates=data.general.map(x=>parseFeedbackDate(pick(x,DATE_KEYS))).filter(Boolean).sort();return dates.at(-1)||''},[data.general]);
+ const range=useMemo(()=>buildRange(filters.period,latestDate?new Date(`${latestDate}T00:00:00`):new Date()),[filters.period,latestDate]);
+ const rows=useMemo(()=>{const query=filters.searchQuery.trim().toLowerCase();return data.general.filter(row=>{const date=parseFeedbackDate(pick(row,DATE_KEYS));if(date&&!inRange(date,range.from,range.to))return false;if(!query)return true;return Object.values(row).some(value=>String(value??'').toLowerCase().includes(query))})},[data.general,filters.searchQuery,range]);
+ const metrics=useMemo(()=>{let promoters=0,detractors=0,passives=0;const totals:number[]=[],services:number[]=[],tastes:number[]=[];let returns=0,returnAnswers=0,critical=0;rows.forEach(row=>{const nps=number(row,NPS_KEYS);if(nps!==null){if(nps>=9)promoters++;else if(nps<=6)detractors++;else passives++}const total=number(row,TOTAL_KEYS),service=number(row,SERVICE_KEYS),taste=number(row,TASTE_KEYS);if(total!==null)totals.push(total);if(service!==null)services.push(service);if(taste!==null)tastes.push(taste);const ret=text(row,RETURN_KEYS).toLowerCase();if(ret){returnAnswers++;if(ret.includes('обов')||ret.includes('скоріш'))returns++}if(text(row,CRITICAL_KEYS))critical++});const npsBase=promoters+passives+detractors;const avg=(values:number[])=>values.length?values.reduce((s,x)=>s+x,0)/values.length:0;return{responses:rows.length,nps:npsBase?(promoters-detractors)/npsBase*100:0,total:avg(totals),service:avg(services),taste:avg(tastes),returnRate:returnAnswers?returns/returnAnswers*100:0,critical}},[rows]);
+ const comments=useMemo(()=>rows.map(row=>({date:parseFeedbackDate(pick(row,DATE_KEYS)),comment:text(row,COMMENT_KEYS),critical:text(row,CRITICAL_KEYS),nps:number(row,NPS_KEYS),score:number(row,TOTAL_KEYS)})).filter(x=>x.comment||x.critical).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,20),[rows]);
+ if(loading)return <div className="flex min-h-screen items-center justify-center bg-[#4d071e] text-white"><RefreshCw className="animate-spin"/></div>;
+ return <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,#7d1640_0%,#580822_34%,#3c0417_100%)] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 md:px-8">
+  <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end"><div><p className="text-[10px] uppercase tracking-[.24em] text-white/45">ГОСТЬОВИЙ ДОСВІД</p><h1 className="mt-2 text-4xl font-black text-[#d8f4f2] md:text-5xl">Відгуки</h1><p className="mt-3 text-sm font-semibold text-[#cfeeed]/75">{range.label}{range.from&&range.to?` · ${fullDate(range.from)} — ${fullDate(range.to)}`:''}</p></div><button onClick={load} className="inline-flex self-start items-center gap-2 rounded-xl border border-white/10 bg-white/[.06] px-4 py-3 text-sm font-bold"><RefreshCw size={17}/> Оновити дані</button></header>
+  {error&&<div className="mb-5 rounded-2xl border border-rose-300/20 bg-rose-300/10 p-4 text-rose-100">{error}</div>}
+  <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Kpi icon={Users} label="Відповіді" value={num(metrics.responses)}/><Kpi icon={Target} label="NPS" value={metrics.nps.toFixed(0)}/><Kpi icon={Star} label="Загальна оцінка" value={metrics.total.toFixed(1)} sub="з 10"/><Kpi icon={TrendingUp} label="Сервіс" value={metrics.service.toFixed(1)} sub="з 5"/><Kpi icon={TrendingUp} label="Смак" value={metrics.taste.toFixed(1)} sub="з 5"/><Kpi icon={MessageSquareText} label="Повернуться" value={pct(metrics.returnRate)} sub={`${metrics.critical} критичних сигналів`}/></div>
+  <div className="grid gap-6 xl:grid-cols-2"><Panel title="Останні коментарі" subtitle="З урахуванням глобального періоду та пошуку"><div className="space-y-3">{comments.length?comments.map((x,i)=><div key={`${x.date}-${i}`} className="rounded-2xl border border-white/10 bg-black/10 p-4"><div className="flex items-center justify-between gap-3 text-xs text-white/40"><span>{x.date||'Без дати'}</span><span>{x.nps!==null?`NPS ${x.nps}`:''}{x.score!==null?` · Оцінка ${x.score}`:''}</span></div>{x.comment&&<p className="mt-2 text-sm text-white/75">{x.comment}</p>}{x.critical&&<p className="mt-3 rounded-xl bg-rose-300/10 px-3 py-2 text-sm font-bold text-rose-200">Критично: {x.critical}</p>}</div>):<p className="text-sm text-white/45">Коментарів у вибраному періоді немає.</p>}</div></Panel>
+  <Panel title="Сигнали для команди" subtitle="Фактичні оцінки без припущень"><div className="space-y-3"><Signal title="Гостьова лояльність" value={`NPS ${metrics.nps.toFixed(0)}`} note={metrics.nps>=50?'Сильний рівень рекомендації.':'Потрібно опрацювати причини пасивних оцінок і детракторів.'}/><Signal title="Намір повернутися" value={pct(metrics.returnRate)} note="Частка відповідей «обов’язково» або «скоріше повернусь»."/><Signal title="Критичні виправлення" value={num(metrics.critical)} note="Кількість відповідей із заповненим полем пріоритетного виправлення."/></div></Panel></div>
+ </div></div>
+}
+function Kpi({icon:Icon,label,value,sub}:{icon:any;label:string;value:string;sub?:string}){return <div className="rounded-2xl border border-white/10 bg-white/[.06] p-5"><div className="flex items-center justify-between text-white/45"><p className="text-xs font-black uppercase">{label}</p><Icon size={18}/></div><div className="mt-2 text-3xl font-black text-[#d8f4f2]">{value}</div>{sub&&<div className="mt-1 text-xs font-bold text-[#cfeeed]/70">{sub}</div>}</div>}
+function Panel({title,subtitle,children}:{title:string;subtitle:string;children:any}){return <section className="rounded-[28px] border border-white/10 bg-white/[.055] p-5 md:p-7"><h2 className="text-2xl font-black text-[#d8f4f2]">{title}</h2><p className="mt-1 text-sm text-white/50">{subtitle}</p><div className="mt-5">{children}</div></section>}
+function Signal({title,value,note}:{title:string;value:string;note:string}){return <div className="rounded-2xl border border-white/10 bg-black/10 p-5"><div className="text-xs font-black uppercase text-white/40">{title}</div><div className="mt-2 text-3xl font-black text-[#cfeeed]">{value}</div><p className="mt-2 text-sm text-white/55">{note}</p></div>}
