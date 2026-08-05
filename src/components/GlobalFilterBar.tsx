@@ -17,14 +17,16 @@ const ROUTE_CONFIG:Record<FilterRoute,{period:boolean;channels:boolean;compare:b
   dashboard_categories:{period:true,channels:false,compare:false,normalize:true,service:true,search:true,placeholder:'Пошук категорії або страви'}
 };
 
+const WEEKDAY_LABELS=['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
+
 export default function GlobalFilterBar({route}:{route:FilterRoute}) {
-  const { filters, setFilters, toggleChannel, toggleCategory, toggleProduct, toggleDate, toggleHour, clearCrossFilters, resetFilters } = useFilters();
+  const { filters, setFilters, toggleChannel, toggleCategory, toggleProduct, toggleDate, toggleHour, toggleWeekday, clearCrossFilters, resetFilters } = useFilters();
   const [open,setOpen]=useState(false);
   const config=ROUTE_CONFIG[route];
   const setPeriod = (period: PeriodKey) => setFilters(prev => ({ ...prev, period }));
   const hasSecondary=config.channels||config.compare||config.normalize||config.service;
   const periodLabel=PERIODS.find(item=>item.key===filters.period)?.label||'Період';
-  const crossCount=filters.selectedChannels.length+filters.selectedCategories.length+filters.selectedProducts.length+filters.selectedDates.length+filters.selectedHours.length;
+  const crossCount=filters.selectedChannels.length+filters.selectedCategories.length+filters.selectedProducts.length+filters.selectedDates.length+filters.selectedHours.length+filters.selectedWeekdays.length;
   const activeCount=crossCount+(filters.compareLFL?1:0)+(filters.normalizeProducts?1:0)+(filters.hideServiceItems?1:0)+(filters.searchQuery?1:0);
   const summary=useMemo(()=>{
     const parts:string[]=[];
@@ -33,6 +35,7 @@ export default function GlobalFilterBar({route}:{route:FilterRoute}) {
     if(filters.selectedCategories.length)parts.push(`${filters.selectedCategories.length} категорій`);
     if(filters.selectedProducts.length)parts.push(`${filters.selectedProducts.length} страв`);
     if(filters.selectedDates.length)parts.push(`${filters.selectedDates.length} дат`);
+    if(filters.selectedWeekdays.length)parts.push(`${filters.selectedWeekdays.length} днів тижня`);
     if(filters.selectedHours.length)parts.push(`${filters.selectedHours.length} годин`);
     if(config.normalize&&filters.normalizeProducts)parts.push('Дублікати об’єднано');
     if(config.service&&filters.hideServiceItems)parts.push('Технічні приховано');
@@ -48,6 +51,7 @@ export default function GlobalFilterBar({route}:{route:FilterRoute}) {
     ...filters.selectedCategories.map(value=>({key:`category:${value}`,label:value,onRemove:()=>toggleCategory(value)})),
     ...filters.selectedProducts.map(value=>({key:`product:${value}`,label:value,onRemove:()=>toggleProduct(value)})),
     ...filters.selectedDates.map(value=>({key:`date:${value}`,label:value,onRemove:()=>toggleDate(value)})),
+    ...filters.selectedWeekdays.map(value=>({key:`weekday:${value}`,label:WEEKDAY_LABELS[value-1]||`День ${value}`,onRemove:()=>toggleWeekday(value)})),
     ...filters.selectedHours.map(value=>({key:`hour:${value}`,label:`${String(value).padStart(2,'0')}:00`,onRemove:()=>toggleHour(value)}))
   ];
 
