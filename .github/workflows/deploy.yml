@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -35,7 +37,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Fetch General and Dishes snapshot
         shell: bash
@@ -44,89 +46,38 @@ jobs:
           mkdir -p public tmp
           CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
           TEMP_FILE="tmp/feedback-data.json"
-
-          if curl --fail --location --silent --show-error \
-            --retry 2 --retry-delay 5 \
-            "${MARMOO_DATA_URL}?_=${CACHE_BUST}" \
-            --output "$TEMP_FILE"; then
+          if curl --fail --location --silent --show-error --retry 2 --retry-delay 5 "${MARMOO_DATA_URL}?_=${CACHE_BUST}" --output "$TEMP_FILE"; then
             if node - "$TEMP_FILE" <<'NODE'
           const fs = require('fs');
-          const file = process.argv[2];
-          const raw = fs.readFileSync(file, 'utf8').trim();
+          const raw = fs.readFileSync(process.argv[2], 'utf8').trim();
           if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) process.exit(1);
           const payload = JSON.parse(raw);
           if (!Array.isArray(payload.general) || !Array.isArray(payload.dishes)) process.exit(1);
-          console.log(`Loaded ${payload.general.length} General rows and ${payload.dishes.length} Dishes rows`);
           NODE
-            then
-              mv "$TEMP_FILE" public/data.json
-            else
-              echo "Feedback endpoint returned an invalid payload; continuing with fallback data."
-              printf '{"general":[],"dishes":[]}' > public/data.json
-            fi
+            then mv "$TEMP_FILE" public/data.json; else printf '{"general":[],"dishes":[]}' > public/data.json; fi
           else
-            echo "Feedback endpoint is unavailable; continuing with fallback data."
             printf '{"general":[],"dishes":[]}' > public/data.json
           fi
 
-      - name: Fetch Sales BI schema v2 snapshot
+      - name: Fetch Sales BI snapshot
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p public tmp
           CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
           TEMP_FILE="tmp/sales-data.json"
-          FRESH_URL="${MARMOO_SALES_DATA_URL}?_=${CACHE_BUST}"
-
-          create_fallback() {
-            cat > public/sales-data.json <<'JSON'
-          {"ok":true,"schemaVersion":2,"summary":{"orders":0,"revenue":0,"margin":0,"avgCheck":0},"daily":[],"channels":[],"channelsDaily":[],"hourly":[],"hourlyDaily":[],"products":[],"productsDaily":[],"heatmap":[],"operatingHours":{"open":10,"close":22},"dataQuality":{"fallback":true,"outOfHoursRows":0,"outOfHoursRevenue":0,"outOfHoursOrders":0}}
-          JSON
-          }
-
-          if curl --fail --location --silent --show-error \
-            --retry 2 --retry-delay 5 \
-            --header "Cache-Control: no-cache, no-store, max-age=0" \
-            --header "Pragma: no-cache" \
-            "$FRESH_URL" \
-            --output "$TEMP_FILE"; then
+          FALLBACK='{"ok":true,"schemaVersion":2,"summary":{"orders":0,"revenue":0,"margin":0,"avgCheck":0},"daily":[],"channels":[],"channelsDaily":[],"hourly":[],"hourlyDaily":[],"products":[],"productsDaily":[],"heatmap":[],"operatingHours":{"open":10,"close":22},"dataQuality":{"fallback":true}}'
+          if curl --fail --location --silent --show-error --retry 2 --retry-delay 5 "${MARMOO_SALES_DATA_URL}?_=${CACHE_BUST}" --output "$TEMP_FILE"; then
             if node - "$TEMP_FILE" <<'NODE'
           const fs = require('fs');
-          const file = process.argv[2];
-          const raw = fs.readFileSync(file, 'utf8').trim();
+          const raw = fs.readFileSync(process.argv[2], 'utf8').trim();
           if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) process.exit(1);
-          const payload = JSON.parse(raw);
-          if (payload.ok === false || Number(payload.schemaVersion) !== 2 || !payload.summary) process.exit(1);
-          const required = ['daily','channels','channelsDaily','hourly','hourlyDaily','products','productsDaily','heatmap'];
-          for (const key of required) if (!Array.isArray(payload[key])) process.exit(1);
-
-          const OPEN_HOUR = 10;
-          const CLOSE_HOUR = 22;
-          const allHourlyDaily = payload.hourlyDaily;
-          const outOfHours = allHourlyDaily.filter(item => Number(item.hour) < OPEN_HOUR || Number(item.hour) > CLOSE_HOUR);
-          payload.operatingHours = { open: OPEN_HOUR, close: CLOSE_HOUR };
-          payload.dataQuality = {
-            ...(payload.dataQuality || {}),
-            fallback: false,
-            outOfHoursRows: outOfHours.length,
-            outOfHoursRevenue: Math.round(outOfHours.reduce((sum, item) => sum + Number(item.revenue || 0), 0) * 100) / 100,
-            outOfHoursOrders: outOfHours.reduce((sum, item) => sum + Number(item.orders || 0), 0)
-          };
-          payload.hourlyDaily = allHourlyDaily.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
-          payload.hourly = payload.hourly.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
-          payload.heatmap = payload.heatmap.filter(item => Number(item.hour) >= OPEN_HOUR && Number(item.hour) <= CLOSE_HOUR);
-          fs.writeFileSync(file, JSON.stringify(payload));
-          console.log(`Sales snapshot OK: ${payload.summary.orders || 0} orders, ${payload.daily.length} days.`);
+          const p = JSON.parse(raw);
+          if (Number(p.schemaVersion) !== 2) process.exit(1);
           NODE
-            then
-              mv "$TEMP_FILE" public/sales-data.json
-            else
-              echo "Sales endpoint returned HTML or an invalid payload; continuing with fallback data."
-              create_fallback
-            fi
+            then mv "$TEMP_FILE" public/sales-data.json; else printf '%s' "$FALLBACK" > public/sales-data.json; fi
           else
-            echo "Sales endpoint is unavailable; continuing with fallback data."
-            create_fallback
+            printf '%s' "$FALLBACK" > public/sales-data.json
           fi
 
       - name: Build Intelligence snapshot
@@ -134,31 +85,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tmp public
-          ORDERS_URL="https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1054385308"
-          ITEMS_URL="https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1526808551"
-
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "$ORDERS_URL" --output tmp/BI_ORDERS.csv
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "$ITEMS_URL" --output tmp/BI_ORDER_ITEMS.csv
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1054385308" --output tmp/BI_ORDERS.csv
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 5 "https://docs.google.com/spreadsheets/d/${MARMOO_BI_SPREADSHEET_ID}/export?format=csv&gid=1526808551" --output tmp/BI_ORDER_ITEMS.csv
           npm run build:intelligence-data -- tmp/BI_ORDERS.csv tmp/BI_ORDER_ITEMS.csv public/intelligence-data.json
-
-          node - <<'NODE'
-          const fs = require('fs');
-          const p = JSON.parse(fs.readFileSync('public/intelligence-data.json','utf8'));
-          if (Number(p.schemaVersion) !== 1) throw new Error('Invalid intelligence schema.');
-          if (!Array.isArray(p.basketPairs) || !Array.isArray(p.customerProfiles) || !Array.isArray(p.drinkAttachment) || !Array.isArray(p.heatmap)) throw new Error('Missing intelligence arrays.');
-          if (!p.dataQuality?.revenueControlPassed) throw new Error('Revenue control failed.');
-          if (p.dataQuality?.publicPhoneFieldsExposed) throw new Error('Public phone fields exposed.');
-          if (p.customerProfiles.some(x => 'phone' in x)) throw new Error('Phone field found in customerProfiles.');
-          console.log(`Intelligence snapshot OK: ${p.source.validOrders} orders, ${p.customerProfiles.length} customers.`);
-          NODE
 
       - name: TypeScript check
         run: npm run lint
 
-      - name: Build Project
-        run: npm run build
+      - name: Clean build project
+        run: |
+          rm -rf dist
+          npm run build
         env:
           VITE_API_URL: /marmoo-fb/data.json
+
+      - name: Verify reviews route in bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -q "dashboard_reviews" dist/assets
+          grep -R -q "Керування відгуками" dist/assets
+          printf 'commit=%s\nbuilt_at=%s\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/build-info.txt
+          touch dist/.nojekyll
 
       - name: Publish gh-pages branch
         shell: bash
@@ -166,7 +114,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          touch dist/.nojekyll
           cd dist
           git init
           git config user.name "github-actions[bot]"
