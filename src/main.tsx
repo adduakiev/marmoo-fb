@@ -9,6 +9,7 @@ import ExecutiveDashboard from './ExecutiveDashboard.tsx';
 import DaypartDashboard from './DaypartDashboard.tsx';
 import WeekdayDashboard from './WeekdayDashboard.tsx';
 import CategoryDashboard from './CategoryDashboard.tsx';
+import ReviewManagementDashboard from './ReviewManagementDashboard.tsx';
 import IntelligenceNav from './components/IntelligenceNav.tsx';
 import GlobalFilterBar from './components/GlobalFilterBar.tsx';
 import ExecutiveSignals from './components/ExecutiveSignals.tsx';
@@ -16,13 +17,14 @@ import DataQualityPanel from './components/DataQualityPanel.tsx';
 import { FilterProvider } from './context/FilterContext.tsx';
 import './index.css';
 
-type RouteName = 'form' | 'dashboard' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday' | 'dashboard_categories';
+type RouteName = 'form' | 'dashboard' | 'dashboard_reviews' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday' | 'dashboard_categories';
 type IntelligenceRoute = Exclude<RouteName, 'form'>;
 
 function resolveRoute(): RouteName {
   const searchParams = new URLSearchParams(window.location.search);
   const viewParam = searchParams.get('view');
   const hash = window.location.hash.replace(/^#\/?/, '').replace(/\?.*$/, '').trim();
+  if (viewParam === 'dashboard_reviews' || hash === 'dashboard_reviews') return 'dashboard_reviews';
   if (viewParam === 'dashboard_categories' || hash === 'dashboard_categories') return 'dashboard_categories';
   if (viewParam === 'dashboard_weekday' || hash === 'dashboard_weekday') return 'dashboard_weekday';
   if (viewParam === 'dashboard_daypart' || hash === 'dashboard_daypart') return 'dashboard_daypart';
@@ -38,7 +40,7 @@ function IntelligenceShell({ route, children }: { route: IntelligenceRoute; chil
   return (
     <div className="min-h-screen bg-[#4c061c]">
       <IntelligenceNav active={route} />
-      <GlobalFilterBar route={route} />
+      {route !== 'dashboard_reviews' && <GlobalFilterBar route={route} />}
       {children}
     </div>
   );
@@ -55,6 +57,7 @@ function RouteRoot() {
       window.removeEventListener('popstate', syncRoute);
     };
   }, []);
+  if (route === 'dashboard_reviews') return <IntelligenceShell route={route}><ReviewManagementDashboard /></IntelligenceShell>;
   if (route === 'dashboard_categories') return <IntelligenceShell route={route}><CategoryDashboard /></IntelligenceShell>;
   if (route === 'dashboard_weekday') return <IntelligenceShell route={route}><WeekdayDashboard /></IntelligenceShell>;
   if (route === 'dashboard_daypart') return <IntelligenceShell route={route}><DaypartDashboard /></IntelligenceShell>;
