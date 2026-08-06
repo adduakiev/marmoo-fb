@@ -46,26 +46,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p public
+          mkdir -p public tmp
           CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
+          TEMP_FILE="tmp/feedback-data.json"
 
-          curl --fail --location --silent --show-error \
-            --retry 3 --retry-delay 5 \
+          if curl --fail --location --silent --show-error \
+            --retry 2 --retry-delay 5 \
             "${MARMOO_DATA_URL}?_=${CACHE_BUST}" \
-            --output public/data.json
-
-          node - <<'NODE'
+            --output "$TEMP_FILE"; then
+            if node - "$TEMP_FILE" <<'NODE'
           const fs = require('fs');
-          const raw = fs.readFileSync('public/data.json', 'utf8').trim();
-          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
-            throw new Error('Feedback Apps Script returned HTML instead of JSON.');
-          }
+          const file = process.argv[2];
+          const raw = fs.readFileSync(file, 'utf8').trim();
+          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) process.exit(1);
           const payload = JSON.parse(raw);
-          if (!Array.isArray(payload.general) || !Array.isArray(payload.dishes)) {
-            throw new Error('Invalid feedback BI payload: expected general[] and dishes[].');
-          }
+          if (!Array.isArray(payload.general) || !Array.isArray(payload.dishes)) process.exit(1);
           console.log(`Loaded ${payload.general.length} General rows and ${payload.dishes.length} Dishes rows`);
           NODE
+            then
+              mv "$TEMP_FILE" public/data.json
+            else
+              echo "Feedback endpoint returned an invalid payload; continuing with fallback data."
+              printf '{"general":[],"dishes":[]}' > public/data.json
+            fi
+          else
+            echo "Feedback endpoint is unavailable; continuing with fallback data."
+            printf '{"general":[],"dishes":[]}' > public/data.json
+          fi
 
       - name: Fetch Sales BI schema v2 snapshot
         shell: bash
