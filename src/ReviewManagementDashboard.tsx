@@ -1,38 +1,667 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
-import {AlertTriangle,CheckCircle2,Clipboard,ExternalLink,Image as ImageIcon,MessageSquareText,Plus,Search,Star,Upload,X} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Clipboard,
+  ExternalLink,
+  Image as ImageIcon,
+  MessageSquareText,
+  Plus,
+  Search,
+  Upload,
+  X,
+} from 'lucide-react';
 
-type Status='new'|'needs_reply'|'draft'|'sent'|'closed';
-type Review={id:string;source:string;date:string;url:string;author:string;authorUrl?:string;localGuide?:boolean;authorReviews?:number;rating:number|null;content:string;images:string[];video?:string|null;status:Status;reply:string;internalNote:string;assignee:string;respondedAt:string;tags:string[]};
-type Business={name:string;address:string;googleRating:number;sampleAverage:number;totalAnalyzed:number;latestReview:string;reviewsWithPhotos:number};
-type Payload={business:Business;reviews:Review[]};
+type Status = 'new' | 'needs_reply' | 'draft' | 'sent' | 'closed';
 
-const DATA_URL=`${import.meta.env.BASE_URL||'/'}google-reviews.json`;
-const STORE='marmoo-review-management-v1';
-const STATUS:Record<Status,string>={new:'Новий',needs_reply:'Без відповіді',draft:'Чернетка',sent:'Відповідь надіслана',closed:'Закрито'};
-const clean=(v:unknown)=>String(v??'').trim();
-const splitCsv=(line:string)=>{const out:string[]=[];let cur='',quote=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'&&line[i+1]==='"'){cur+='"';i++;continue}if(c==='"'){quote=!quote;continue}if(c===','&&!quote){out.push(cur);cur='';continue}cur+=c}out.push(cur);return out};
-const parseCsv=(raw:string):Review[]=>{const lines=raw.replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean);if(lines.length<2)return[];const headers=splitCsv(lines[0]);return lines.slice(1).map((line,index)=>{const cols=splitCsv(line),row=Object.fromEntries(headers.map((h,i)=>[h,cols[i]??'']));const url=clean(row['Review URL']);const images=clean(row['Review image']).split(',').map(v=>v.trim()).filter(Boolean);return{id:url||`manual-${Date.now()}-${index}`,source:'Google',date:clean(row['Review date']),url,author:clean(row['Author name'])||'Без імені',authorUrl:clean(row['Author URL']),localGuide:clean(row['Local Guide']).toLowerCase()==='true',authorReviews:Number(row['Author reviews'])||0,rating:Number(row['Star rating'])||null,content:clean(row['Review content']),images,video:clean(row['Review video'])||null,status:'needs_reply',reply:'',internalNote:'',assignee:'',respondedAt:'',tags:[]}})};
-const stars=(value:number|null)=>value?`${'★'.repeat(value)}${'☆'.repeat(5-value)}`:'Без оцінки';
+type Review = {
+  id: string;
+  source: string;
+  date: string;
+  url: string;
+  author: string;
+  authorUrl?: string;
+  localGuide?: boolean;
+  authorReviews?: number;
+  rating: number | null;
+  content: string;
+  images: string[];
+  video?: string | null;
+  status: Status;
+  reply: string;
+  internalNote: string;
+  assignee: string;
+  respondedAt: string;
+  tags: string[];
+};
 
-export default function ReviewManagementDashboard(){
- const[data,setData]=useState<Payload>({business:{name:'MARMOO',address:'',googleRating:4.4,sampleAverage:4.35,totalAnalyzed:40,latestReview:'2026-07-30',reviewsWithPhotos:19},reviews:[]});
- const[query,setQuery]=useState(''),[status,setStatus]=useState<'all'|Status>('all'),[rating,setRating]=useState('all'),[selected,setSelected]=useState<Review|null>(null),[addOpen,setAddOpen]=useState(false);const input=useRef<HTMLInputElement>(null);
- useEffect(()=>{const local=localStorage.getItem(STORE);if(local){try{setData(JSON.parse(local));return}catch{}}fetch(DATA_URL).then(r=>r.json()).then(json=>setData(json)).catch(()=>{})},[]);
- useEffect(()=>{localStorage.setItem(STORE,JSON.stringify(data))},[data]);
- const filtered=useMemo(()=>data.reviews.filter(r=>{if(status!=='all'&&r.status!==status)return false;if(rating!=='all'&&r.rating!==Number(rating))return false;const q=query.toLowerCase();return !q||[r.author,r.content,r.reply,r.source].some(v=>v.toLowerCase().includes(q))}),[data.reviews,query,status,rating]);
- const stats=useMemo(()=>{const total=data.reviews.length,avg=total?data.reviews.reduce((s,r)=>s+(r.rating||0),0)/data.reviews.filter(r=>r.rating).length:0,unanswered=data.reviews.filter(r=>r.status==='new'||r.status==='needs_reply'||r.status==='draft').length,critical=data.reviews.filter(r=>(r.rating||5)<=2).length,answered=data.reviews.filter(r=>r.status==='sent'||r.status==='closed').length;return{total,avg,unanswered,critical,answered,total?answered/total*100:0}},[data.reviews]);
- const patch=(id:string,changes:Partial<Review>)=>setData(prev=>({...prev,reviews:prev.reviews.map(r=>r.id===id?{...r,...changes}:r)}));
- const importFile=async(file:File)=>{const reviews=parseCsv(await file.text());setData(prev=>({...prev,reviews}));};
- const addReview=(review:Review)=>{setData(prev=>({...prev,reviews:[review,...prev.reviews]}));setAddOpen(false)};
- return <main className="mx-auto max-w-[1600px] px-3 py-5 text-white md:px-6">
-  <section className="rounded-[28px] border border-white/10 bg-white/[.04] p-5 md:p-7"><div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><div className="text-[11px] font-black uppercase tracking-[.2em] text-[#cfeeed]/55">Reputation management</div><h1 className="mt-2 text-3xl font-black tracking-tight text-[#d8f4f2] md:text-4xl">Керування відгуками</h1><p className="mt-2 max-w-3xl text-sm text-white/55">Google, Instagram та інші джерела в одному робочому центрі. Статуси, відповіді, нотатки й контроль опрацювання.</p></div><div className="flex flex-wrap gap-2"><input ref={input} type="file" accept=".csv" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void importFile(f)}}/><button onClick={()=>input.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[.06] px-4 py-3 text-sm font-black"><Upload size={16}/>Імпорт CSV</button><button onClick={()=>setAddOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#cfeeed] px-4 py-3 text-sm font-black text-[#531027]"><Plus size={16}/>Додати відгук</button></div></div></section>
-  <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">{[["Усього",stats.total],["Середня оцінка",stats.avg?stats.avg.toFixed(2):'—'],["Google-рейтинг",data.business.googleRating],["Без відповіді",stats.unanswered],["Критичні",stats.critical],["Опрацьовано",`${stats.answered.toFixed(0)} · ${stats.answered?stats.answered:0}`]].map(([l,v])=><div key={String(l)} className="rounded-2xl border border-white/10 bg-white/[.045] p-4"><div className="text-[10px] font-black uppercase tracking-[.15em] text-white/40">{l}</div><div className="mt-2 text-2xl font-black text-[#d8f4f2]">{v}</div></div>)}</section>
-  <section className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-3"><div className="grid gap-2 md:grid-cols-[1fr_190px_150px]"><label className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Пошук за автором, текстом або відповіддю" className="w-full rounded-xl border border-white/10 bg-white/[.04] py-3 pl-10 pr-3 text-sm outline-none placeholder:text-white/30"/></label><select value={status} onChange={e=>setStatus(e.target.value as 'all'|Status)} className="rounded-xl border border-white/10 bg-[#4c061c] px-3 py-3 text-sm"><option value="all">Усі статуси</option>{Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><select value={rating} onChange={e=>setRating(e.target.value)} className="rounded-xl border border-white/10 bg-[#4c061c] px-3 py-3 text-sm"><option value="all">Усі оцінки</option>{[5,4,3,2,1].map(v=><option key={v}>{v}</option>)}</select></div></section>
-  <section className="mt-4 grid gap-3">{filtered.length===0?<div className="rounded-3xl border border-dashed border-white/15 p-12 text-center text-white/45">Відгуків за вибраними умовами немає. Завантаж CSV Google через кнопку «Імпорт CSV».</div>:filtered.map(r=><article key={r.id} className={`rounded-3xl border p-5 ${r.rating&&r.rating<=2?'border-[#f08aa5]/45 bg-[#f08aa5]/[.06]':'border-white/10 bg-white/[.04]'}`}><div className="flex flex-col gap-4 lg:flex-row lg:justify-between"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#cfeeed]/12 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-[#d8f4f2]">{r.source}</span><span className={`rounded-full px-3 py-1 text-[10px] font-black ${r.status==='sent'||r.status==='closed'?'bg-emerald-400/15 text-emerald-200':'bg-amber-300/15 text-amber-100'}`}>{STATUS[r.status]}</span>{r.images.length>0&&<span className="inline-flex items-center gap-1 text-xs text-white/45"><ImageIcon size={13}/>{r.images.length}</span>}</div><div className="mt-3 flex flex-wrap items-center gap-3"><h2 className="font-black text-white">{r.author}</h2><span className="font-black tracking-wide text-[#f3c969]">{stars(r.rating)}</span><span className="text-xs text-white/40">{r.date}</span></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/72">{r.content||'Відгук без тексту'}</p>{r.reply&&<div className="mt-4 rounded-2xl border border-[#cfeeed]/15 bg-[#cfeeed]/[.05] p-4"><div className="text-[10px] font-black uppercase tracking-[.15em] text-[#cfeeed]/55">Наша відповідь</div><p className="mt-2 text-sm leading-6 text-white/70">{r.reply}</p></div>}</div><div className="flex shrink-0 gap-2 lg:flex-col"><button onClick={()=>setSelected(r)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#cfeeed] px-4 py-2.5 text-sm font-black text-[#531027]"><MessageSquareText size={15}/>Опрацювати</button>{r.url&&<a href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white/60"><ExternalLink size={15}/>Google</a>}</div></div></article>)}</section>
-  {selected&&<ReviewModal review={selected} onClose={()=>setSelected(null)} onSave={changes=>{patch(selected.id,changes);setSelected({...selected,...changes})}}/>}
-  {addOpen&&<AddModal onClose={()=>setAddOpen(false)} onAdd={addReview}/>} 
- </main>
+type Business = {
+  name: string;
+  address: string;
+  googleRating: number;
+  sampleAverage: number;
+  totalAnalyzed: number;
+  latestReview: string;
+  reviewsWithPhotos: number;
+};
+
+type Payload = {
+  business: Business;
+  reviews: Review[];
+};
+
+const DATA_URL = `${import.meta.env.BASE_URL || '/'}google-reviews.json`;
+const STORE = 'marmoo-review-management-v1';
+
+const STATUS: Record<Status, string> = {
+  new: 'Новий',
+  needs_reply: 'Без відповіді',
+  draft: 'Чернетка',
+  sent: 'Відповідь надіслана',
+  closed: 'Закрито',
+};
+
+const clean = (value: unknown) => String(value ?? '').trim();
+
+function splitCsv(line: string): string[] {
+  const output: string[] = [];
+  let current = '';
+  let quoted = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+
+    if (character === '"' && line[index + 1] === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      quoted = !quoted;
+      continue;
+    }
+
+    if (character === ',' && !quoted) {
+      output.push(current);
+      current = '';
+      continue;
+    }
+
+    current += character;
+  }
+
+  output.push(current);
+  return output;
 }
 
-function ReviewModal({review,onClose,onSave}:{review:Review;onClose:()=>void;onSave:(c:Partial<Review>)=>void}){const[reply,setReply]=useState(review.reply),[note,setNote]=useState(review.internalNote),[assignee,setAssignee]=useState(review.assignee),[status,setStatus]=useState<Status>(review.status);const save=()=>onSave({reply,internalNote:note,assignee,status,respondedAt:status==='sent'&&!review.respondedAt?new Date().toISOString():review.respondedAt});return <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm md:items-center md:p-5"><div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-[28px] border border-white/12 bg-[#3f0417] p-5 text-white shadow-2xl md:rounded-[28px] md:p-7"><div className="flex justify-between gap-4"><div><div className="text-xs font-black text-[#f3c969]">{stars(review.rating)}</div><h2 className="mt-1 text-xl font-black">{review.author}</h2></div><button onClick={onClose}><X/></button></div><p className="mt-4 rounded-2xl bg-white/[.04] p-4 text-sm leading-6 text-white/70">{review.content||'Відгук без тексту'}</p><div className="mt-4 grid gap-3 md:grid-cols-2"><label className="text-xs font-bold text-white/55">Статус<select value={status} onChange={e=>setStatus(e.target.value as Status)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#4c061c] p-3 text-sm text-white">{Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label className="text-xs font-bold text-white/55">Відповідальний<input value={assignee} onChange={e=>setAssignee(e.target.value)} placeholder="Ім’я працівника" className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] p-3 text-sm text-white outline-none"/></label></div><label className="mt-4 block text-xs font-bold text-white/55">Публічна відповідь<textarea value={reply} onChange={e=>setReply(e.target.value)} rows={5} className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none"/></label><div className="mt-2 flex gap-2"><button onClick={()=>navigator.clipboard.writeText(reply)} disabled={!reply} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-black disabled:opacity-40"><Clipboard size={14}/>Копіювати</button></div><label className="mt-4 block text-xs font-bold text-white/55">Внутрішній коментар<textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none"/></label><div className="mt-5 flex justify-end gap-2"><button onClick={onClose} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-black">Закрити</button><button onClick={save} className="rounded-xl bg-[#cfeeed] px-4 py-3 text-sm font-black text-[#531027]">Зберегти</button></div></div></div>}
-function AddModal({onClose,onAdd}:{onClose:()=>void;onAdd:(r:Review)=>void}){const[source,setSource]=useState('Instagram'),[author,setAuthor]=useState(''),[content,setContent]=useState(''),[rating,setRating]=useState<number|null>(null);return <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-xl rounded-[28px] border border-white/12 bg-[#3f0417] p-6 text-white"><div className="flex justify-between"><h2 className="text-xl font-black">Додати відгук</h2><button onClick={onClose}><X/></button></div><div className="mt-5 grid gap-3"><select value={source} onChange={e=>setSource(e.target.value)} className="rounded-xl border border-white/10 bg-[#4c061c] p-3"><option>Instagram</option><option>Google</option><option>ChoiceQR</option><option>Glovo</option><option>Bolt</option><option>Інше</option></select><input value={author} onChange={e=>setAuthor(e.target.value)} placeholder="Автор або нік" className="rounded-xl border border-white/10 bg-white/[.04] p-3 outline-none"/><select value={rating??''} onChange={e=>setRating(e.target.value?Number(e.target.value):null)} className="rounded-xl border border-white/10 bg-[#4c061c] p-3"><option value="">Без оцінки</option>{[5,4,3,2,1].map(v=><option key={v} value={v}>{v} зірок</option>)}</select><textarea value={content} onChange={e=>setContent(e.target.value)} rows={5} placeholder="Текст відгуку" className="rounded-2xl border border-white/10 bg-white/[.04] p-4 outline-none"/></div><div className="mt-5 flex justify-end gap-2"><button onClick={onClose} className="rounded-xl border border-white/10 px-4 py-3 font-black">Скасувати</button><button disabled={!content.trim()} onClick={()=>onAdd({id:`manual-${Date.now()}`,source,date:new Date().toISOString().slice(0,10),url:'',author:author||'Без імені',rating,content,images:[],status:'needs_reply',reply:'',internalNote:'',assignee:'',respondedAt:'',tags:[]})} className="rounded-xl bg-[#cfeeed] px-4 py-3 font-black text-[#531027] disabled:opacity-40">Додати</button></div></div></div>}
+function parseCsv(raw: string): Review[] {
+  const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+
+  const headers = splitCsv(lines[0]);
+
+  return lines.slice(1).map((line, index) => {
+    const columns = splitCsv(line);
+    const row = Object.fromEntries(headers.map((header, columnIndex) => [header, columns[columnIndex] ?? '']));
+    const url = clean(row['Review URL']);
+    const images = clean(row['Review image'])
+      .split(',')
+      .map(value => value.trim())
+      .filter(Boolean);
+
+    return {
+      id: url || `manual-${Date.now()}-${index}`,
+      source: 'Google',
+      date: clean(row['Review date']),
+      url,
+      author: clean(row['Author name']) || 'Без імені',
+      authorUrl: clean(row['Author URL']),
+      localGuide: clean(row['Local Guide']).toLowerCase() === 'true',
+      authorReviews: Number(row['Author reviews']) || 0,
+      rating: Number(row['Star rating']) || null,
+      content: clean(row['Review content']),
+      images,
+      video: clean(row['Review video']) || null,
+      status: 'needs_reply',
+      reply: '',
+      internalNote: '',
+      assignee: '',
+      respondedAt: '',
+      tags: [],
+    };
+  });
+}
+
+const stars = (value: number | null) =>
+  value ? `${'★'.repeat(value)}${'☆'.repeat(5 - value)}` : 'Без оцінки';
+
+export default function ReviewManagementDashboard() {
+  const [data, setData] = useState<Payload>({
+    business: {
+      name: 'MARMOO',
+      address: '',
+      googleRating: 4.4,
+      sampleAverage: 4.35,
+      totalAnalyzed: 40,
+      latestReview: '2026-07-30',
+      reviewsWithPhotos: 19,
+    },
+    reviews: [],
+  });
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<'all' | Status>('all');
+  const [rating, setRating] = useState('all');
+  const [selected, setSelected] = useState<Review | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const local = localStorage.getItem(STORE);
+    if (local) {
+      try {
+        setData(JSON.parse(local) as Payload);
+        return;
+      } catch {
+        localStorage.removeItem(STORE);
+      }
+    }
+
+    fetch(DATA_URL)
+      .then(response => response.json())
+      .then(json => setData(json as Payload))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORE, JSON.stringify(data));
+  }, [data]);
+
+  const filtered = useMemo(
+    () =>
+      data.reviews.filter(review => {
+        if (status !== 'all' && review.status !== status) return false;
+        if (rating !== 'all' && review.rating !== Number(rating)) return false;
+        const normalizedQuery = query.toLowerCase();
+        return (
+          !normalizedQuery ||
+          [review.author, review.content, review.reply, review.source].some(value =>
+            value.toLowerCase().includes(normalizedQuery),
+          )
+        );
+      }),
+    [data.reviews, query, rating, status],
+  );
+
+  const stats = useMemo(() => {
+    const total = data.reviews.length;
+    const rated = data.reviews.filter(review => review.rating !== null);
+    const average = rated.length
+      ? rated.reduce((sum, review) => sum + (review.rating ?? 0), 0) / rated.length
+      : 0;
+    const unanswered = data.reviews.filter(review =>
+      ['new', 'needs_reply', 'draft'].includes(review.status),
+    ).length;
+    const critical = data.reviews.filter(review => (review.rating ?? 5) <= 2).length;
+    const answered = data.reviews.filter(review =>
+      ['sent', 'closed'].includes(review.status),
+    ).length;
+
+    return {
+      total,
+      average,
+      unanswered,
+      critical,
+      answered,
+      answeredRate: total ? (answered / total) * 100 : 0,
+    };
+  }, [data.reviews]);
+
+  const patch = (id: string, changes: Partial<Review>) => {
+    setData(previous => ({
+      ...previous,
+      reviews: previous.reviews.map(review =>
+        review.id === id ? { ...review, ...changes } : review,
+      ),
+    }));
+  };
+
+  const importFile = async (file: File) => {
+    const reviews = parseCsv(await file.text());
+    setData(previous => ({ ...previous, reviews }));
+  };
+
+  const addReview = (review: Review) => {
+    setData(previous => ({ ...previous, reviews: [review, ...previous.reviews] }));
+    setAddOpen(false);
+  };
+
+  const cards: Array<[string, string | number]> = [
+    ['Усього', stats.total],
+    ['Середня оцінка', stats.average ? stats.average.toFixed(2) : '—'],
+    ['Google-рейтинг', data.business.googleRating],
+    ['Без відповіді', stats.unanswered],
+    ['Критичні', stats.critical],
+    ['Опрацьовано', `${stats.answered} · ${stats.answeredRate.toFixed(0)}%`],
+  ];
+
+  return (
+    <main className="mx-auto max-w-[1600px] px-3 py-5 text-white md:px-6">
+      <section className="rounded-[28px] border border-white/10 bg-white/[.04] p-5 md:p-7">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[.2em] text-[#cfeeed]/55">
+              Reputation management
+            </div>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-[#d8f4f2] md:text-4xl">
+              Керування відгуками
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm text-white/55">
+              Google, Instagram та інші джерела в одному робочому центрі. Статуси,
+              відповіді, нотатки й контроль опрацювання.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={input}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) void importFile(file);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => input.current?.click()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[.06] px-4 py-3 text-sm font-black"
+            >
+              <Upload size={16} /> Імпорт CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#cfeeed] px-4 py-3 text-sm font-black text-[#531027]"
+            >
+              <Plus size={16} /> Додати відгук
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        {cards.map(([label, value]) => (
+          <div key={label} className="rounded-2xl border border-white/10 bg-white/[.045] p-4">
+            <div className="text-[10px] font-black uppercase tracking-[.15em] text-white/40">
+              {label}
+            </div>
+            <div className="mt-2 text-2xl font-black text-[#d8f4f2]">{value}</div>
+          </div>
+        ))}
+      </section>
+
+      <section className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-3">
+        <div className="grid gap-2 md:grid-cols-[1fr_190px_150px]">
+          <label className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35"
+            />
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Пошук за автором, текстом або відповіддю"
+              className="w-full rounded-xl border border-white/10 bg-white/[.04] py-3 pl-10 pr-3 text-sm outline-none placeholder:text-white/30"
+            />
+          </label>
+          <select
+            value={status}
+            onChange={event => setStatus(event.target.value as 'all' | Status)}
+            className="rounded-xl border border-white/10 bg-[#4c061c] px-3 py-3 text-sm"
+          >
+            <option value="all">Усі статуси</option>
+            {Object.entries(STATUS).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={rating}
+            onChange={event => setRating(event.target.value)}
+            className="rounded-xl border border-white/10 bg-[#4c061c] px-3 py-3 text-sm"
+          >
+            <option value="all">Усі оцінки</option>
+            {[5, 4, 3, 2, 1].map(value => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
+      <section className="mt-4 grid gap-3">
+        {filtered.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-white/15 p-12 text-center text-white/45">
+            Відгуків за вибраними умовами немає. Завантаж CSV Google через кнопку
+            «Імпорт CSV».
+          </div>
+        ) : (
+          filtered.map(review => (
+            <article
+              key={review.id}
+              className={`rounded-3xl border p-5 ${
+                review.rating && review.rating <= 2
+                  ? 'border-[#f08aa5]/45 bg-[#f08aa5]/[.06]'
+                  : 'border-white/10 bg-white/[.04]'
+              }`}
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[#cfeeed]/12 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-[#d8f4f2]">
+                      {review.source}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-[10px] font-black ${
+                        review.status === 'sent' || review.status === 'closed'
+                          ? 'bg-emerald-400/15 text-emerald-200'
+                          : 'bg-amber-300/15 text-amber-100'
+                      }`}
+                    >
+                      {STATUS[review.status]}
+                    </span>
+                    {review.images.length > 0 && (
+                      <span className="inline-flex items-center gap-1 text-xs text-white/45">
+                        <ImageIcon size={13} /> {review.images.length}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <h2 className="font-black text-white">{review.author}</h2>
+                    <span className="font-black tracking-wide text-[#f3c969]">
+                      {stars(review.rating)}
+                    </span>
+                    <span className="text-xs text-white/40">{review.date}</span>
+                  </div>
+
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/72">
+                    {review.content || 'Відгук без тексту'}
+                  </p>
+
+                  {review.reply && (
+                    <div className="mt-4 rounded-2xl border border-[#cfeeed]/15 bg-[#cfeeed]/[.05] p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[.15em] text-[#cfeeed]/55">
+                        Наша відповідь
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-white/70">{review.reply}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex shrink-0 gap-2 lg:flex-col">
+                  <button
+                    type="button"
+                    onClick={() => setSelected(review)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#cfeeed] px-4 py-2.5 text-sm font-black text-[#531027]"
+                  >
+                    <MessageSquareText size={15} /> Опрацювати
+                  </button>
+                  {review.url && (
+                    <a
+                      href={review.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white/60"
+                    >
+                      <ExternalLink size={15} /> Google
+                    </a>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </section>
+
+      {selected && (
+        <ReviewModal
+          review={selected}
+          onClose={() => setSelected(null)}
+          onSave={changes => {
+            patch(selected.id, changes);
+            setSelected({ ...selected, ...changes });
+          }}
+        />
+      )}
+      {addOpen && <AddModal onClose={() => setAddOpen(false)} onAdd={addReview} />}
+    </main>
+  );
+}
+
+function ReviewModal({
+  review,
+  onClose,
+  onSave,
+}: {
+  review: Review;
+  onClose: () => void;
+  onSave: (changes: Partial<Review>) => void;
+}) {
+  const [reply, setReply] = useState(review.reply);
+  const [note, setNote] = useState(review.internalNote);
+  const [assignee, setAssignee] = useState(review.assignee);
+  const [status, setStatus] = useState<Status>(review.status);
+
+  const save = () => {
+    onSave({
+      reply,
+      internalNote: note,
+      assignee,
+      status,
+      respondedAt:
+        status === 'sent' && !review.respondedAt
+          ? new Date().toISOString()
+          : review.respondedAt,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm md:items-center md:p-5">
+      <div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-[28px] border border-white/12 bg-[#3f0417] p-5 text-white shadow-2xl md:rounded-[28px] md:p-7">
+        <div className="flex justify-between gap-4">
+          <div>
+            <div className="text-xs font-black text-[#f3c969]">{stars(review.rating)}</div>
+            <h2 className="mt-1 text-xl font-black">{review.author}</h2>
+          </div>
+          <button type="button" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+
+        <p className="mt-4 rounded-2xl bg-white/[.04] p-4 text-sm leading-6 text-white/70">
+          {review.content || 'Відгук без тексту'}
+        </p>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="text-xs font-bold text-white/55">
+            Статус
+            <select
+              value={status}
+              onChange={event => setStatus(event.target.value as Status)}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#4c061c] p-3 text-sm text-white"
+            >
+              {Object.entries(STATUS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-bold text-white/55">
+            Відповідальний
+            <input
+              value={assignee}
+              onChange={event => setAssignee(event.target.value)}
+              placeholder="Ім’я працівника"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] p-3 text-sm text-white outline-none"
+            />
+          </label>
+        </div>
+
+        <label className="mt-4 block text-xs font-bold text-white/55">
+          Публічна відповідь
+          <textarea
+            value={reply}
+            onChange={event => setReply(event.target.value)}
+            rows={5}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none"
+          />
+        </label>
+
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard.writeText(reply)}
+            disabled={!reply}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-black disabled:opacity-40"
+          >
+            <Clipboard size={14} /> Копіювати
+          </button>
+        </div>
+
+        <label className="mt-4 block text-xs font-bold text-white/55">
+          Внутрішній коментар
+          <textarea
+            value={note}
+            onChange={event => setNote(event.target.value)}
+            rows={3}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none"
+          />
+        </label>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 px-4 py-3 text-sm font-black"
+          >
+            Закрити
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            className="rounded-xl bg-[#cfeeed] px-4 py-3 text-sm font-black text-[#531027]"
+          >
+            Зберегти
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddModal({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (review: Review) => void;
+}) {
+  const [source, setSource] = useState('Instagram');
+  const [author, setAuthor] = useState('');
+  const [content, setContent] = useState('');
+  const [rating, setRating] = useState<number | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/65 p-4">
+      <div className="w-full max-w-xl rounded-[28px] border border-white/12 bg-[#3f0417] p-6 text-white">
+        <div className="flex justify-between">
+          <h2 className="text-xl font-black">Додати відгук</h2>
+          <button type="button" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3">
+          <select
+            value={source}
+            onChange={event => setSource(event.target.value)}
+            className="rounded-xl border border-white/10 bg-[#4c061c] p-3"
+          >
+            <option>Instagram</option>
+            <option>Google</option>
+            <option>ChoiceQR</option>
+            <option>Glovo</option>
+            <option>Bolt</option>
+            <option>Інше</option>
+          </select>
+          <input
+            value={author}
+            onChange={event => setAuthor(event.target.value)}
+            placeholder="Автор або нік"
+            className="rounded-xl border border-white/10 bg-white/[.04] p-3 outline-none"
+          />
+          <select
+            value={rating ?? ''}
+            onChange={event =>
+              setRating(event.target.value ? Number(event.target.value) : null)
+            }
+            className="rounded-xl border border-white/10 bg-[#4c061c] p-3"
+          >
+            <option value="">Без оцінки</option>
+            {[5, 4, 3, 2, 1].map(value => (
+              <option key={value} value={value}>
+                {value} зірок
+              </option>
+            ))}
+          </select>
+          <textarea
+            value={content}
+            onChange={event => setContent(event.target.value)}
+            rows={5}
+            placeholder="Текст відгуку"
+            className="rounded-2xl border border-white/10 bg-white/[.04] p-4 outline-none"
+          />
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 px-4 py-3 font-black"
+          >
+            Скасувати
+          </button>
+          <button
+            type="button"
+            disabled={!content.trim()}
+            onClick={() =>
+              onAdd({
+                id: `manual-${Date.now()}`,
+                source,
+                date: new Date().toISOString().slice(0, 10),
+                url: '',
+                author: author || 'Без імені',
+                rating,
+                content,
+                images: [],
+                status: 'needs_reply',
+                reply: '',
+                internalNote: '',
+                assignee: '',
+                respondedAt: '',
+                tags: [],
+              })
+            }
+            className="rounded-xl bg-[#cfeeed] px-4 py-3 font-black text-[#531027] disabled:opacity-40"
+          >
+            Додати
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
