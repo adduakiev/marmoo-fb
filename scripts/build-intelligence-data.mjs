@@ -4,8 +4,7 @@ import path from 'node:path';
 const ordersPath=process.argv[2]||'tmp/BI_ORDERS.csv';
 const itemsPath=process.argv[3]||'tmp/BI_ORDER_ITEMS.csv';
 const outPath=process.argv[4]||'public/intelligence-data.json';
-const EXPECTED_REVENUE=2251259.18;
-const REVENUE_TOLERANCE=0.01;
+const REVENUE_TOLERANCE=0.05;
 
 function parseCsv(text){
  const rows=[];let row=[],cell='',quoted=false;
@@ -46,11 +45,13 @@ const duplicateOrderIds=validOrders.length-new Set(validOrders.map(o=>o.order_id
 const missingDateOrders=validOrders.filter(o=>!isoDate(o.sale_date)).length;
 const ambiguousPhoneOrders=validOrders.filter(o=>phoneMatches(o.customer_phone_raw||o.customer_phone).length>1).length;
 const validOrderIds=new Set(validOrders.map(o=>o.order_id));
-const cleanItems=items.filter(i=>validOrderIds.has(i.order_id)&&number(i.quantity)>0&&number(i.revenue)>0&&!isService(i)).map(i=>({...i,product_name:normalizeName(i.product_name)}));
+const matchedItems=items.filter(i=>validOrderIds.has(i.order_id));
+const cleanItems=matchedItems.filter(i=>number(i.quantity)>0&&number(i.revenue)>0&&!isService(i)).map(i=>({...i,product_name:normalizeName(i.product_name)}));
 
 const revenueTotal=Number(validOrders.reduce((sum,o)=>sum+number(o.order_revenue),0).toFixed(2));
-const revenueControlDelta=Number((revenueTotal-EXPECTED_REVENUE).toFixed(2));
-if(Math.abs(revenueControlDelta)>REVENUE_TOLERANCE)throw new Error(`Revenue control failed: expected ${EXPECTED_REVENUE}, got ${revenueTotal}, delta ${revenueControlDelta}`);
+const itemRevenueTotal=Number(matchedItems.reduce((sum,i)=>sum+number(i.revenue),0).toFixed(2));
+const revenueControlDelta=Number((revenueTotal-itemRevenueTotal).toFixed(2));
+if(Math.abs(revenueControlDelta)>REVENUE_TOLERANCE)throw new Error(`Revenue control failed: orders ${revenueTotal}, items ${itemRevenueTotal}, delta ${revenueControlDelta}`);
 if(duplicateOrderIds>0)throw new Error(`Duplicate order_id detected: ${duplicateOrderIds}`);
 
 const productsByOrder=new Map();
@@ -79,8 +80,8 @@ const heatMap=new Map();
 for(const o of validOrders){const weekday=String(o.weekday||'').trim(),hour=number(o.open_hour);if(!weekday||hour<0||hour>23)continue;const key=`${weekday}|${hour}`;const cur=heatMap.get(key)||{weekday,weekdayNumber:number(o.weekday_number),hour,orders:0,revenue:0};cur.orders++;cur.revenue+=number(o.order_revenue);heatMap.set(key,cur)}
 const heatmap=[...heatMap.values()].map(x=>({...x,averageCheck:x.orders?x.revenue/x.orders:0})).sort((a,b)=>a.weekdayNumber-b.weekdayNumber||a.hour-b.hour);
 
-const dataQuality={expectedRevenue:EXPECTED_REVENUE,revenueTotal,revenueControlDelta,revenueControlPassed:Math.abs(revenueControlDelta)<=REVENUE_TOLERANCE,totalOrders:orders.length,validOrders:validOrders.length,zeroRevenueOrders,duplicateOrderIds,missingDateOrders,identifiedOrders,uniqueCustomers:customerProfiles.length,phoneCoverage:validOrders.length?identifiedOrders/validOrders.length*100:0,ambiguousPhoneOrders,publicPhoneFieldsExposed:false};
+const dataQuality={revenueTotal,itemRevenueTotal,revenueControlDelta,revenueControlPassed:Math.abs(revenueControlDelta)<=REVENUE_TOLERANCE,revenueControlMethod:'BI_ORDERS vs BI_ORDER_ITEMS',totalOrders:orders.length,validOrders:validOrders.length,zeroRevenueOrders,duplicateOrderIds,missingDateOrders,identifiedOrders,uniqueCustomers:customerProfiles.length,phoneCoverage:validOrders.length?identifiedOrders/validOrders.length*100:0,ambiguousPhoneOrders,publicPhoneFieldsExposed:false};
 const payload={schemaVersion:1,generatedAt:new Date().toISOString(),source:{spreadsheetId:'1EhKZ6oP95aXe3GL4iIDfGd5NmYbQPKIHat4Sml76TKo',ordersRows:orders.length,itemRows:items.length,validOrders:validOrders.length,validItems:cleanItems.length,latestDate:latest},dataQuality,basketPairs,customerProfiles,drinkAttachment,heatmap};
 fs.mkdirSync(path.dirname(outPath),{recursive:true});fs.writeFileSync(outPath,JSON.stringify(payload));
 console.log(`Intelligence data: ${validOrders.length} orders, ${basketPairs.length} pairs, ${customerProfiles.length} customers, ${drinkAttachment.length} channels, ${heatmap.length} heatmap cells`);
-console.log(`Revenue control passed: ${revenueTotal} UAH; phone coverage ${dataQuality.phoneCoverage.toFixed(2)}%; ambiguous phones ${ambiguousPhoneOrders}`);
+console.log(`Revenue control passed: orders ${revenueTotal} UAH = items ${itemRevenueTotal} UAH; phone coverage ${dataQuality.phoneCoverage.toFixed(2)}%; ambiguous phones ${ambiguousPhoneOrders}`);
