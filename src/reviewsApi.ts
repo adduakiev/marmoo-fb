@@ -25,6 +25,7 @@ export type SharedReview = {
 
 type ListResponse = { ok: boolean; reviews?: SharedReview[]; error?: string; updatedAt?: string };
 type MutationResponse = { ok: boolean; review?: SharedReview; error?: string };
+type BulkResponse = { ok: boolean; created?: number; updated?: number; error?: string };
 
 const API_URL = String(import.meta.env.VITE_REVIEWS_API_URL || '').trim();
 
@@ -34,8 +35,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   if (!response.ok) throw new Error(`Reviews API HTTP ${response.status}`);
   if (text.trim().startsWith('<')) throw new Error('Reviews API returned HTML instead of JSON');
-  const payload = JSON.parse(text) as T;
-  return payload;
+  return JSON.parse(text) as T;
 }
 
 export async function listSharedReviews(signal?: AbortSignal): Promise<SharedReview[]> {
@@ -47,30 +47,43 @@ export async function listSharedReviews(signal?: AbortSignal): Promise<SharedRev
     signal,
   });
   const payload = await parseResponse<ListResponse>(response);
-  if (!payload.ok || !Array.isArray(payload.reviews)) throw new Error(payload.error || 'Invalid reviews list response');
+  if (!payload.ok || !Array.isArray(payload.reviews)) {
+    throw new Error(payload.error || 'Invalid reviews list response');
+  }
   return payload.reviews;
 }
 
-async function postReviewAction(body: unknown): Promise<MutationResponse> {
+async function postReviewAction<T>(body: unknown): Promise<T> {
   if (!API_URL) throw new Error('VITE_REVIEWS_API_URL is not configured');
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(body),
   });
-  const payload = await parseResponse<MutationResponse>(response);
-  if (!payload.ok) throw new Error(payload.error || 'Reviews mutation failed');
-  return payload;
+  return parseResponse<T>(response);
 }
 
 export async function createSharedReview(review: SharedReview): Promise<SharedReview> {
-  const payload = await postReviewAction({ action: 'create', review });
+  const payload = await postReviewAction<MutationResponse>({ action: 'create', review });
+  if (!payload.ok) throw new Error(payload.error || 'Reviews mutation failed');
   if (!payload.review) throw new Error('Reviews API did not return the created review');
   return payload.review;
 }
 
-export async function updateSharedReview(id: string, changes: Partial<SharedReview>): Promise<SharedReview> {
-  const payload = await postReviewAction({ action: 'update', id, changes });
+export async function updateSharedReview(
+  id: string,
+  changes: Partial<SharedReview>,
+): Promise<SharedReview> {
+  const payload = await postReviewAction<MutationResponse>({ action: 'update', id, changes });
+  if (!payload.ok) throw new Error(payload.error || 'Reviews mutation failed');
   if (!payload.review) throw new Error('Reviews API did not return the updated review');
   return payload.review;
+}
+
+export async function bulkUpsertSharedReviews(
+  reviews: SharedReview[],
+): Promise<{ created: number; updated: number }> {
+  const payload = await postReviewAction<BulkResponse>({ action: 'bulkUpsert', reviews });
+  if (!payload.ok) throw new Error(payload.error || 'Reviews bulk sync failed');
+  return { created: Number(payload.created || 0), updated: Number(payload.updated || 0) };
 }
