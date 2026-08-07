@@ -116,6 +116,160 @@ body:has(.recharts-wrapper) input[type="date"]::-webkit-calendar-picker-indicato
   cursor: pointer;
 }
 
+/* Reviews workspace: the reviews module has no Recharts node, so give it its own UI skin. */
+body:has(div[class*="max-w-6xl"]) {
+  color-scheme: dark;
+}
+
+/* Processing modal — clearer form controls and less visual noise. */
+div.fixed.inset-0.z-\[200\] div.max-w-6xl {
+  background:
+    radial-gradient(circle at 88% 0%, rgba(207, 243, 242, .075), transparent 30%),
+    #300410 !important;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl header {
+  background: rgba(255, 255, 255, .032) !important;
+  backdrop-filter: blur(18px);
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl aside {
+  background: rgba(17, 1, 7, .16) !important;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl section {
+  background: rgba(255, 255, 255, .012);
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl input,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl select,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea {
+  color: #fffaf7 !important;
+  background: rgba(255, 255, 255, .07) !important;
+  border-color: rgba(255, 255, 255, .12) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .04),
+    0 8px 24px rgba(14, 0, 6, .10);
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl input:hover,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl select:hover,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea:hover {
+  background: rgba(255, 255, 255, .085) !important;
+  border-color: rgba(207, 243, 242, .25) !important;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl input:focus,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl select:focus,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea:focus {
+  outline: none !important;
+  background: rgba(255, 255, 255, .10) !important;
+  border-color: rgba(207, 243, 242, .62) !important;
+  box-shadow:
+    0 0 0 4px rgba(207, 243, 242, .08),
+    0 14px 34px rgba(15, 0, 7, .16) !important;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea {
+  min-height: 118px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea[rows="7"] {
+  min-height: 190px;
+  background: rgba(255, 255, 255, .082) !important;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl select {
+  cursor: pointer;
+  appearance: auto;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl select option {
+  color: #fff8f4;
+  background: #3b0717;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-6xl input::placeholder,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea::placeholder {
+  color: rgba(255, 248, 244, .34) !important;
+}
+
+/* Make the review text itself feel like reference material, not another input panel. */
+div.fixed.inset-0.z-\[200\] div.max-w-6xl aside > div[class*="rounded-[22px]"] {
+  background: rgba(255, 255, 255, .045) !important;
+  border-color: rgba(255, 255, 255, .09) !important;
+}
+
+/* Stronger, calmer action footer. */
+div.fixed.inset-0.z-\[200\] div.max-w-6xl section > div:last-child {
+  position: sticky;
+  bottom: -28px;
+  z-index: 8;
+  margin-left: -28px;
+  margin-right: -28px;
+  padding: 16px 28px 18px;
+  background: linear-gradient(to top, rgba(48, 4, 16, .99) 70%, rgba(48, 4, 16, .90));
+  backdrop-filter: blur(16px);
+}
+
+/* Bigger click targets for modal actions. */
+div.fixed.inset-0.z-\[200\] div.max-w-6xl button,
+div.fixed.inset-0.z-\[200\] div.max-w-6xl a {
+  min-height: 42px;
+}
+
+/* Add-review modal controls get the same treatment. */
+div.fixed.inset-0.z-\[200\] div.max-w-xl input,
+div.fixed.inset-0.z-\[200\] div.max-w-xl select,
+div.fixed.inset-0.z-\[200\] div.max-w-xl textarea {
+  color: #fffaf7 !important;
+  background: rgba(255, 255, 255, .07) !important;
+  border-color: rgba(255, 255, 255, .12) !important;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-xl input:focus,
+div.fixed.inset-0.z-\[200\] div.max-w-xl select:focus,
+div.fixed.inset-0.z-\[200\] div.max-w-xl textarea:focus {
+  outline: none !important;
+  border-color: rgba(207, 243, 242, .58) !important;
+  box-shadow: 0 0 0 4px rgba(207, 243, 242, .08);
+}
+
+@media (max-width: 1023px) {
+  div.fixed.inset-0.z-\[200\] div.max-w-6xl {
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+
+  div.fixed.inset-0.z-\[200\] div.max-w-6xl section > div:last-child {
+    bottom: -20px;
+    margin-left: -20px;
+    margin-right: -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  div.fixed.inset-0.z-\[200\] div.max-w-6xl header {
+    padding-top: 14px !important;
+    padding-bottom: 14px !important;
+  }
+
+  div.fixed.inset-0.z-\[200\] div.max-w-6xl input,
+  div.fixed.inset-0.z-\[200\] div.max-w-6xl select,
+  div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea {
+    font-size: 16px !important;
+  }
+
+  div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea[rows="7"] {
+    min-height: 165px;
+  }
+}
+
 /* Recharts native/default tooltips */
 body:has(.recharts-wrapper) .recharts-tooltip-wrapper {
   z-index: 60 !important;
