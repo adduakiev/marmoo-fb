@@ -17,6 +17,7 @@ concurrency:
 env:
   MARMOO_DATA_URL: https://script.google.com/macros/s/AKfycbzglLMWDMZRc1NAzWi_Lluo1O69XAVURkNf8mWn_c6XRzlkvzXQkL8nCoumMG6Z_dAB/exec
   MARMOO_SALES_DATA_URL: https://script.google.com/macros/s/AKfycbz-ptK7zk4cVFNwCkjUhghPYlVCORiqyafmGtI9dvxqCOJIGV4K12dlhZq4OlaIO0yyzQ/exec
+  MARMOO_REVIEWS_API_URL: https://script.google.com/macros/s/AKfycbx7oCTUXwRGY1EqnVBsDfSDDI5Zr1-D1K-Cy9NK1altm5a9MOezTpr828m7KkgoC3Hj/exec
   MARMOO_BI_SPREADSHEET_ID: 1EhKZ6oP95aXe3GL4iIDfGd5NmYbQPKIHat4Sml76TKo
 
 jobs:
@@ -80,6 +81,24 @@ jobs:
             printf '%s' "$FALLBACK" > public/sales-data.json
           fi
 
+      - name: Check Reviews API
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMP_FILE="tmp/reviews-health.json"
+          if curl --fail --location --silent --show-error --max-time 30 "${MARMOO_REVIEWS_API_URL}?action=health&_=${GITHUB_RUN_ID}" --output "$TEMP_FILE"; then
+            node - "$TEMP_FILE" <<'NODE'
+          const fs = require('fs');
+          const raw = fs.readFileSync(process.argv[2], 'utf8').trim();
+          if (raw.startsWith('<')) throw new Error('Reviews API returned HTML');
+          const p = JSON.parse(raw);
+          if (!p.ok) throw new Error(p.error || 'Reviews API health check failed');
+          console.log('Reviews API OK');
+          NODE
+          else
+            echo "Reviews API health check unavailable; build will continue with client-side error state."
+          fi
+
       - name: Build Intelligence snapshot
         shell: bash
         run: |
@@ -98,6 +117,7 @@ jobs:
           npm run build
         env:
           VITE_API_URL: /marmoo-fb/data.json
+          VITE_REVIEWS_API_URL: ${{ env.MARMOO_REVIEWS_API_URL }}
 
       - name: Verify reviews route in bundle
         shell: bash
@@ -105,6 +125,7 @@ jobs:
           set -euo pipefail
           grep -R -q "dashboard_reviews" dist/assets
           grep -R -q "Керування відгуками" dist/assets
+          grep -R -q "Спільна база синхронізована" dist/assets
           printf 'commit=%s\nbuilt_at=%s\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/build-info.txt
           touch dist/.nojekyll
 
