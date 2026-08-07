@@ -1,37 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clipboard,
   ExternalLink,
   Image as ImageIcon,
   MessageSquareText,
   Plus,
+  RefreshCw,
   Search,
   Upload,
   X,
 } from 'lucide-react';
+import {
+  bulkUpsertSharedReviews,
+  createSharedReview,
+  hasSharedReviewsApi,
+  listSharedReviews,
+  type SharedReview,
+  type SharedReviewStatus,
+  updateSharedReview,
+} from './reviewsApi';
 
-type Status = 'new' | 'needs_reply' | 'draft' | 'sent' | 'closed';
-
-type Review = {
-  id: string;
-  source: string;
-  date: string;
-  url: string;
-  author: string;
-  authorUrl?: string;
-  localGuide?: boolean;
-  authorReviews?: number;
-  rating: number | null;
-  content: string;
-  images: string[];
-  video?: string | null;
-  status: Status;
-  reply: string;
-  internalNote: string;
-  assignee: string;
-  respondedAt: string;
-  tags: string[];
-};
+type Status = SharedReviewStatus;
+type Review = SharedReview;
 
 type Business = {
   name: string;
@@ -48,8 +38,10 @@ type Payload = {
   reviews: Review[];
 };
 
+type SyncState = 'loading' | 'synced' | 'saving' | 'offline' | 'error';
+
 const DATA_URL = `${import.meta.env.BASE_URL || '/'}google-reviews.json`;
-const STORE = 'marmoo-review-management-v1';
+const CACHE_KEY = 'marmoo-review-management-cache-v2';
 
 const STATUS: Record<Status, string> = {
   new: 'Новий',
@@ -61,6 +53,16 @@ const STATUS: Record<Status, string> = {
 
 const clean = (value: unknown) => String(value ?? '').trim();
 
+const DEFAULT_BUSINESS: Business = {
+  name: 'MARMOO бістро мармурової яловичини',
+  address: 'вулиця Велика Васильківська, 57/3, Київ, 02000',
+  googleRating: 4.4,
+  sampleAverage: 4.35,
+  totalAnalyzed: 40,
+  latestReview: '2026-07-30',
+  reviewsWithPhotos: 19,
+};
+
 function splitCsv(line: string): string[] {
   const output: string[] = [];
   let current = '';
@@ -68,24 +70,20 @@ function splitCsv(line: string): string[] {
 
   for (let index = 0; index < line.length; index += 1) {
     const character = line[index];
-
     if (character === '"' && line[index + 1] === '"') {
       current += '"';
       index += 1;
       continue;
     }
-
     if (character === '"') {
       quoted = !quoted;
       continue;
     }
-
     if (character === ',' && !quoted) {
       output.push(current);
       current = '';
       continue;
     }
-
     current += character;
   }
 
@@ -96,12 +94,13 @@ function splitCsv(line: string): string[] {
 function parseCsv(raw: string): Review[] {
   const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
-
   const headers = splitCsv(lines[0]);
 
   return lines.slice(1).map((line, index) => {
     const columns = splitCsv(line);
-    const row = Object.fromEntries(headers.map((header, columnIndex) => [header, columns[columnIndex] ?? '']));
+    const row = Object.fromEntries(
+      headers.map((header, columnIndex) => [header, columns[columnIndex] ?? '']),
+    );
     const url = clean(row['Review URL']);
     const images = clean(row['Review image'])
       .split(',')
@@ -126,6 +125,8 @@ function parseCsv(raw: string): Review[] {
       internalNote: '',
       assignee: '',
       respondedAt: '',
+      createdAt: clean(row['Review date']),
+      updatedAt: '',
       tags: [],
     };
   });
@@ -134,46 +135,99 @@ function parseCsv(raw: string): Review[] {
 const stars = (value: number | null) =>
   value ? `${'★'.repeat(value)}${'☆'.repeat(5 - value)}` : 'Без оцінки';
 
-export default function ReviewManagementDashboard() {
-  const [data, setData] = useState<Payload>({
-    business: {
-      name: 'MARMOO',
-      address: '',
-      googleRating: 4.4,
-      sampleAverage: 4.35,
-      totalAnalyzed: 40,
-      latestReview: '2026-07-30',
-      reviewsWithPhotos: 19,
-    },
-    reviews: [],
+const sortReviews = (reviews: Review[]) =>
+  [...reviews].sort((a, b) => {
+    const dateDiff = String(b.date).localeCompare(String(a.date));
+    if (dateDiff !== 0) return dateDiff;
+    return String(b.updatedAt || b.createdAt || '').localeCompare(
+      String(a.updatedAt || a.createdAt || ''),
+    );
   });
+
+export default function ReviewManagementDashboard() {
+  const [data, setData] = useState<Payload>({ business: DEFAULT_BUSINESS, reviews: [] });
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | Status>('all');
   const [rating, setRating] = useState('all');
   const [selected, setSelected] = useState<Review | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [syncState, setSyncState] = useState<SyncState>('loading');
+  const [syncMessage, setSyncMessage] = useState('Підключення до спільної бази…');
+  const [lastSyncedAt, setLastSyncedAt] = useState('');
   const input = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const local = localStorage.getItem(STORE);
-    if (local) {
-      try {
-        setData(JSON.parse(local) as Payload);
-        return;
-      } catch {
-        localStorage.removeItem(STORE);
-      }
-    }
-
-    fetch(DATA_URL)
-      .then(response => response.json())
-      .then(json => setData(json as Payload))
-      .catch(() => undefined);
+  const updateDataReviews = useCallback((reviews: Review[]) => {
+    const sorted = sortReviews(reviews);
+    setData(previous => ({ ...previous, reviews: sorted }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(sorted));
   }, []);
 
+  const refresh = useCallback(
+    async (silent = false) => {
+      if (!hasSharedReviewsApi) {
+        if (!silent) {
+          setSyncState('offline');
+          setSyncMessage('Спільна база не налаштована');
+        }
+        return;
+      }
+
+      if (!silent) {
+        setSyncState('loading');
+        setSyncMessage('Оновлюємо спільну базу…');
+      }
+
+      try {
+        const reviews = await listSharedReviews();
+        updateDataReviews(reviews);
+        setSyncState('synced');
+        setSyncMessage('Спільна база синхронізована');
+        setLastSyncedAt(new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }));
+      } catch (error) {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached && data.reviews.length === 0) {
+          try {
+            updateDataReviews(JSON.parse(cached) as Review[]);
+          } catch {
+            // Ignore malformed cache.
+          }
+        }
+        setSyncState('error');
+        setSyncMessage(error instanceof Error ? error.message : 'Помилка синхронізації');
+      }
+    },
+    [data.reviews.length, updateDataReviews],
+  );
+
   useEffect(() => {
-    localStorage.setItem(STORE, JSON.stringify(data));
-  }, [data]);
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      try {
+        const response = await fetch(DATA_URL, { cache: 'no-store' });
+        if (response.ok) {
+          const payload = (await response.json()) as Partial<Payload>;
+          if (!cancelled && payload.business) {
+            setData(previous => ({ ...previous, business: { ...DEFAULT_BUSINESS, ...payload.business } }));
+          }
+        }
+      } catch {
+        // Business meta is optional.
+      }
+      if (!cancelled) await refresh();
+    };
+
+    void bootstrap();
+    const interval = window.setInterval(() => void refresh(true), 30_000);
+    const onFocus = () => void refresh(true);
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [refresh]);
 
   const filtered = useMemo(
     () =>
@@ -183,8 +237,8 @@ export default function ReviewManagementDashboard() {
         const normalizedQuery = query.toLowerCase();
         return (
           !normalizedQuery ||
-          [review.author, review.content, review.reply, review.source].some(value =>
-            value.toLowerCase().includes(normalizedQuery),
+          [review.author, review.content, review.reply, review.source, review.assignee].some(value =>
+            String(value || '').toLowerCase().includes(normalizedQuery),
           )
         );
       }),
@@ -201,10 +255,7 @@ export default function ReviewManagementDashboard() {
       ['new', 'needs_reply', 'draft'].includes(review.status),
     ).length;
     const critical = data.reviews.filter(review => (review.rating ?? 5) <= 2).length;
-    const answered = data.reviews.filter(review =>
-      ['sent', 'closed'].includes(review.status),
-    ).length;
-
+    const answered = data.reviews.filter(review => ['sent', 'closed'].includes(review.status)).length;
     return {
       total,
       average,
@@ -215,23 +266,57 @@ export default function ReviewManagementDashboard() {
     };
   }, [data.reviews]);
 
-  const patch = (id: string, changes: Partial<Review>) => {
-    setData(previous => ({
-      ...previous,
-      reviews: previous.reviews.map(review =>
-        review.id === id ? { ...review, ...changes } : review,
-      ),
-    }));
+  const saveChanges = async (id: string, changes: Partial<Review>) => {
+    const previous = data.reviews;
+    const optimistic = previous.map(review => (review.id === id ? { ...review, ...changes } : review));
+    updateDataReviews(optimistic);
+    setSyncState('saving');
+    setSyncMessage('Зберігаємо…');
+
+    try {
+      const saved = await updateSharedReview(id, changes);
+      updateDataReviews(optimistic.map(review => (review.id === id ? saved : review)));
+      setSelected(saved);
+      setSyncState('synced');
+      setSyncMessage('Збережено у спільній базі');
+      setLastSyncedAt(new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }));
+    } catch (error) {
+      updateDataReviews(previous);
+      setSyncState('error');
+      setSyncMessage(error instanceof Error ? error.message : 'Не вдалося зберегти');
+      throw error;
+    }
   };
 
   const importFile = async (file: File) => {
     const reviews = parseCsv(await file.text());
-    setData(previous => ({ ...previous, reviews }));
+    if (!reviews.length) return;
+    setSyncState('saving');
+    setSyncMessage(`Синхронізуємо ${reviews.length} відгуків…`);
+    try {
+      const result = await bulkUpsertSharedReviews(reviews);
+      setSyncMessage(`Імпортовано: ${result.created}, оновлено: ${result.updated}`);
+      await refresh(true);
+    } catch (error) {
+      setSyncState('error');
+      setSyncMessage(error instanceof Error ? error.message : 'Помилка імпорту');
+    }
   };
 
-  const addReview = (review: Review) => {
-    setData(previous => ({ ...previous, reviews: [review, ...previous.reviews] }));
-    setAddOpen(false);
+  const addReview = async (review: Review) => {
+    setSyncState('saving');
+    setSyncMessage('Додаємо відгук…');
+    try {
+      const created = await createSharedReview(review);
+      updateDataReviews([created, ...data.reviews.filter(item => item.id !== created.id)]);
+      setAddOpen(false);
+      setSyncState('synced');
+      setSyncMessage('Відгук додано у спільну базу');
+      setLastSyncedAt(new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }));
+    } catch (error) {
+      setSyncState('error');
+      setSyncMessage(error instanceof Error ? error.message : 'Не вдалося додати відгук');
+    }
   };
 
   const cards: Array<[string, string | number]> = [
@@ -242,6 +327,13 @@ export default function ReviewManagementDashboard() {
     ['Критичні', stats.critical],
     ['Опрацьовано', `${stats.answered} · ${stats.answeredRate.toFixed(0)}%`],
   ];
+
+  const syncTone =
+    syncState === 'synced'
+      ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
+      : syncState === 'saving' || syncState === 'loading'
+        ? 'border-amber-300/20 bg-amber-300/10 text-amber-100'
+        : 'border-rose-300/20 bg-rose-300/10 text-rose-100';
 
   return (
     <main className="mx-auto max-w-[1600px] px-3 py-5 text-white md:px-6">
@@ -255,9 +347,12 @@ export default function ReviewManagementDashboard() {
               Керування відгуками
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-white/55">
-              Google, Instagram та інші джерела в одному робочому центрі. Статуси,
-              відповіді, нотатки й контроль опрацювання.
+              Єдина спільна база Google, Instagram та інших відгуків для всієї команди.
             </p>
+            <div className={`mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${syncTone}`}>
+              {(syncState === 'loading' || syncState === 'saving') && <RefreshCw size={13} className="animate-spin" />}
+              {syncMessage}{lastSyncedAt ? ` · ${lastSyncedAt}` : ''}
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -269,8 +364,16 @@ export default function ReviewManagementDashboard() {
               onChange={event => {
                 const file = event.target.files?.[0];
                 if (file) void importFile(file);
+                event.currentTarget.value = '';
               }}
             />
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[.06] px-4 py-3 text-sm font-black"
+            >
+              <RefreshCw size={16} /> Оновити
+            </button>
             <button
               type="button"
               onClick={() => input.current?.click()}
@@ -292,9 +395,7 @@ export default function ReviewManagementDashboard() {
       <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {cards.map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-white/10 bg-white/[.045] p-4">
-            <div className="text-[10px] font-black uppercase tracking-[.15em] text-white/40">
-              {label}
-            </div>
+            <div className="text-[10px] font-black uppercase tracking-[.15em] text-white/40">{label}</div>
             <div className="mt-2 text-2xl font-black text-[#d8f4f2]">{value}</div>
           </div>
         ))}
@@ -303,14 +404,11 @@ export default function ReviewManagementDashboard() {
       <section className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-3">
         <div className="grid gap-2 md:grid-cols-[1fr_190px_150px]">
           <label className="relative">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35"
-            />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35" />
             <input
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Пошук за автором, текстом або відповіддю"
+              placeholder="Пошук за автором, текстом, відповіддю або відповідальним"
               className="w-full rounded-xl border border-white/10 bg-white/[.04] py-3 pl-10 pr-3 text-sm outline-none placeholder:text-white/30"
             />
           </label>
@@ -320,11 +418,7 @@ export default function ReviewManagementDashboard() {
             className="rounded-xl border border-white/10 bg-[#4c061c] px-3 py-3 text-sm"
           >
             <option value="all">Усі статуси</option>
-            {Object.entries(STATUS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
+            {Object.entries(STATUS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
           </select>
           <select
             value={rating}
@@ -332,11 +426,7 @@ export default function ReviewManagementDashboard() {
             className="rounded-xl border border-white/10 bg-[#4c061c] px-3 py-3 text-sm"
           >
             <option value="all">Усі оцінки</option>
-            {[5, 4, 3, 2, 1].map(value => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
+            {[5, 4, 3, 2, 1].map(value => <option key={value} value={value}>{value}</option>)}
           </select>
         </div>
       </section>
@@ -344,81 +434,47 @@ export default function ReviewManagementDashboard() {
       <section className="mt-4 grid gap-3">
         {filtered.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-white/15 p-12 text-center text-white/45">
-            Відгуків за вибраними умовами немає. Завантаж CSV Google через кнопку
-            «Імпорт CSV».
+            {syncState === 'loading' ? 'Завантажуємо відгуки…' : 'Відгуків за вибраними умовами немає.'}
           </div>
         ) : (
           filtered.map(review => (
             <article
               key={review.id}
-              className={`rounded-3xl border p-5 ${
-                review.rating && review.rating <= 2
-                  ? 'border-[#f08aa5]/45 bg-[#f08aa5]/[.06]'
-                  : 'border-white/10 bg-white/[.04]'
-              }`}
+              className={`rounded-3xl border p-5 ${review.rating && review.rating <= 2 ? 'border-[#f08aa5]/45 bg-[#f08aa5]/[.06]' : 'border-white/10 bg-white/[.04]'}`}
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-[#cfeeed]/12 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-[#d8f4f2]">
-                      {review.source}
-                    </span>
-                    <span
-                      className={`rounded-full px-3 py-1 text-[10px] font-black ${
-                        review.status === 'sent' || review.status === 'closed'
-                          ? 'bg-emerald-400/15 text-emerald-200'
-                          : 'bg-amber-300/15 text-amber-100'
-                      }`}
-                    >
-                      {STATUS[review.status]}
-                    </span>
-                    {review.images.length > 0 && (
-                      <span className="inline-flex items-center gap-1 text-xs text-white/45">
-                        <ImageIcon size={13} /> {review.images.length}
-                      </span>
-                    )}
+                    <span className="rounded-full bg-[#cfeeed]/12 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-[#d8f4f2]">{review.source}</span>
+                    <span className={`rounded-full px-3 py-1 text-[10px] font-black ${review.status === 'sent' || review.status === 'closed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-300/15 text-amber-100'}`}>{STATUS[review.status]}</span>
+                    {review.images.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-white/45"><ImageIcon size={13} /> {review.images.length}</span>}
+                    {review.assignee && <span className="text-xs text-white/40">Відповідальний: {review.assignee}</span>}
                   </div>
-
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <h2 className="font-black text-white">{review.author}</h2>
-                    <span className="font-black tracking-wide text-[#f3c969]">
-                      {stars(review.rating)}
-                    </span>
+                    <span className="font-black tracking-wide text-[#f3c969]">{stars(review.rating)}</span>
                     <span className="text-xs text-white/40">{review.date}</span>
                   </div>
-
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/72">
-                    {review.content || 'Відгук без тексту'}
-                  </p>
-
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/72">{review.content || 'Відгук без тексту'}</p>
+                  {review.images.length > 0 && (
+                    <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                      {review.images.slice(0, 6).map((image, index) => (
+                        <a key={`${review.id}-${index}`} href={image} target="_blank" rel="noreferrer" className="shrink-0">
+                          <img src={image} alt="Фото з відгуку" className="h-20 w-20 rounded-xl object-cover" loading="lazy" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   {review.reply && (
                     <div className="mt-4 rounded-2xl border border-[#cfeeed]/15 bg-[#cfeeed]/[.05] p-4">
-                      <div className="text-[10px] font-black uppercase tracking-[.15em] text-[#cfeeed]/55">
-                        Наша відповідь
-                      </div>
+                      <div className="text-[10px] font-black uppercase tracking-[.15em] text-[#cfeeed]/55">Наша відповідь</div>
                       <p className="mt-2 text-sm leading-6 text-white/70">{review.reply}</p>
                     </div>
                   )}
                 </div>
-
                 <div className="flex shrink-0 gap-2 lg:flex-col">
-                  <button
-                    type="button"
-                    onClick={() => setSelected(review)}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#cfeeed] px-4 py-2.5 text-sm font-black text-[#531027]"
-                  >
-                    <MessageSquareText size={15} /> Опрацювати
-                  </button>
-                  {review.url && (
-                    <a
-                      href={review.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white/60"
-                    >
-                      <ExternalLink size={15} /> Google
-                    </a>
-                  )}
+                  <button type="button" onClick={() => setSelected(review)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#cfeeed] px-4 py-2.5 text-sm font-black text-[#531027]"><MessageSquareText size={15} /> Опрацювати</button>
+                  {review.url && <a href={review.url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white/60"><ExternalLink size={15} /> Оригінал</a>}
                 </div>
               </div>
             </article>
@@ -430,10 +486,7 @@ export default function ReviewManagementDashboard() {
         <ReviewModal
           review={selected}
           onClose={() => setSelected(null)}
-          onSave={changes => {
-            patch(selected.id, changes);
-            setSelected({ ...selected, ...changes });
-          }}
+          onSave={changes => saveChanges(selected.id, changes)}
         />
       )}
       {addOpen && <AddModal onClose={() => setAddOpen(false)} onAdd={addReview} />}
@@ -441,226 +494,92 @@ export default function ReviewManagementDashboard() {
   );
 }
 
-function ReviewModal({
-  review,
-  onClose,
-  onSave,
-}: {
-  review: Review;
-  onClose: () => void;
-  onSave: (changes: Partial<Review>) => void;
-}) {
+function ReviewModal({ review, onClose, onSave }: { review: Review; onClose: () => void; onSave: (changes: Partial<Review>) => Promise<void> }) {
   const [reply, setReply] = useState(review.reply);
   const [note, setNote] = useState(review.internalNote);
   const [assignee, setAssignee] = useState(review.assignee);
   const [status, setStatus] = useState<Status>(review.status);
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
-    onSave({
-      reply,
-      internalNote: note,
-      assignee,
-      status,
-      respondedAt:
-        status === 'sent' && !review.respondedAt
-          ? new Date().toISOString()
-          : review.respondedAt,
-    });
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave({
+        reply,
+        internalNote: note,
+        assignee,
+        status,
+        respondedAt: status === 'sent' && !review.respondedAt ? new Date().toISOString() : review.respondedAt,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm md:items-center md:p-5">
       <div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-[28px] border border-white/12 bg-[#3f0417] p-5 text-white shadow-2xl md:rounded-[28px] md:p-7">
-        <div className="flex justify-between gap-4">
-          <div>
-            <div className="text-xs font-black text-[#f3c969]">{stars(review.rating)}</div>
-            <h2 className="mt-1 text-xl font-black">{review.author}</h2>
-          </div>
-          <button type="button" onClick={onClose}>
-            <X />
-          </button>
-        </div>
-
-        <p className="mt-4 rounded-2xl bg-white/[.04] p-4 text-sm leading-6 text-white/70">
-          {review.content || 'Відгук без тексту'}
-        </p>
-
+        <div className="flex justify-between gap-4"><div><div className="text-xs font-black text-[#f3c969]">{stars(review.rating)}</div><h2 className="mt-1 text-xl font-black">{review.author}</h2></div><button type="button" onClick={onClose}><X /></button></div>
+        <p className="mt-4 rounded-2xl bg-white/[.04] p-4 text-sm leading-6 text-white/70">{review.content || 'Відгук без тексту'}</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <label className="text-xs font-bold text-white/55">
-            Статус
-            <select
-              value={status}
-              onChange={event => setStatus(event.target.value as Status)}
-              className="mt-2 w-full rounded-xl border border-white/10 bg-[#4c061c] p-3 text-sm text-white"
-            >
-              {Object.entries(STATUS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs font-bold text-white/55">
-            Відповідальний
-            <input
-              value={assignee}
-              onChange={event => setAssignee(event.target.value)}
-              placeholder="Ім’я працівника"
-              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] p-3 text-sm text-white outline-none"
-            />
-          </label>
+          <label className="text-xs font-bold text-white/55">Статус<select value={status} onChange={event => setStatus(event.target.value as Status)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#4c061c] p-3 text-sm text-white">{Object.entries(STATUS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+          <label className="text-xs font-bold text-white/55">Відповідальний<input value={assignee} onChange={event => setAssignee(event.target.value)} placeholder="Ім’я працівника" className="mt-2 w-full rounded-xl border border-white/10 bg-white/[.04] p-3 text-sm text-white outline-none" /></label>
         </div>
-
-        <label className="mt-4 block text-xs font-bold text-white/55">
-          Публічна відповідь
-          <textarea
-            value={reply}
-            onChange={event => setReply(event.target.value)}
-            rows={5}
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none"
-          />
-        </label>
-
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
-            onClick={() => void navigator.clipboard.writeText(reply)}
-            disabled={!reply}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-black disabled:opacity-40"
-          >
-            <Clipboard size={14} /> Копіювати
-          </button>
-        </div>
-
-        <label className="mt-4 block text-xs font-bold text-white/55">
-          Внутрішній коментар
-          <textarea
-            value={note}
-            onChange={event => setNote(event.target.value)}
-            rows={3}
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none"
-          />
-        </label>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/10 px-4 py-3 text-sm font-black"
-          >
-            Закрити
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            className="rounded-xl bg-[#cfeeed] px-4 py-3 text-sm font-black text-[#531027]"
-          >
-            Зберегти
-          </button>
-        </div>
+        <label className="mt-4 block text-xs font-bold text-white/55">Публічна відповідь<textarea value={reply} onChange={event => setReply(event.target.value)} rows={5} className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none" /></label>
+        <div className="mt-2 flex gap-2"><button type="button" onClick={() => void navigator.clipboard.writeText(reply)} disabled={!reply} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-black disabled:opacity-40"><Clipboard size={14} /> Копіювати</button></div>
+        <label className="mt-4 block text-xs font-bold text-white/55">Внутрішній коментар<textarea value={note} onChange={event => setNote(event.target.value)} rows={3} className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.04] p-4 text-sm text-white outline-none" /></label>
+        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-black">Закрити</button><button type="button" onClick={() => void save()} disabled={saving} className="rounded-xl bg-[#cfeeed] px-4 py-3 text-sm font-black text-[#531027] disabled:opacity-50">{saving ? 'Зберігаємо…' : 'Зберегти'}</button></div>
       </div>
     </div>
   );
 }
 
-function AddModal({
-  onClose,
-  onAdd,
-}: {
-  onClose: () => void;
-  onAdd: (review: Review) => void;
-}) {
+function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Review) => Promise<void> }) {
   const [source, setSource] = useState('Instagram');
   const [author, setAuthor] = useState('');
   const [content, setContent] = useState('');
   const [rating, setRating] = useState<number | null>(null);
+  const [url, setUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const add = async () => {
+    setSaving(true);
+    try {
+      await onAdd({
+        id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        source,
+        date: new Date().toISOString().slice(0, 10),
+        url,
+        author: author || 'Без імені',
+        rating,
+        content,
+        images: [],
+        status: 'needs_reply',
+        reply: '',
+        internalNote: '',
+        assignee: '',
+        respondedAt: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: '',
+        tags: [],
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/65 p-4">
       <div className="w-full max-w-xl rounded-[28px] border border-white/12 bg-[#3f0417] p-6 text-white">
-        <div className="flex justify-between">
-          <h2 className="text-xl font-black">Додати відгук</h2>
-          <button type="button" onClick={onClose}>
-            <X />
-          </button>
-        </div>
-
+        <div className="flex justify-between"><h2 className="text-xl font-black">Додати відгук</h2><button type="button" onClick={onClose}><X /></button></div>
         <div className="mt-5 grid gap-3">
-          <select
-            value={source}
-            onChange={event => setSource(event.target.value)}
-            className="rounded-xl border border-white/10 bg-[#4c061c] p-3"
-          >
-            <option>Instagram</option>
-            <option>Google</option>
-            <option>ChoiceQR</option>
-            <option>Glovo</option>
-            <option>Bolt</option>
-            <option>Інше</option>
-          </select>
-          <input
-            value={author}
-            onChange={event => setAuthor(event.target.value)}
-            placeholder="Автор або нік"
-            className="rounded-xl border border-white/10 bg-white/[.04] p-3 outline-none"
-          />
-          <select
-            value={rating ?? ''}
-            onChange={event =>
-              setRating(event.target.value ? Number(event.target.value) : null)
-            }
-            className="rounded-xl border border-white/10 bg-[#4c061c] p-3"
-          >
-            <option value="">Без оцінки</option>
-            {[5, 4, 3, 2, 1].map(value => (
-              <option key={value} value={value}>
-                {value} зірок
-              </option>
-            ))}
-          </select>
-          <textarea
-            value={content}
-            onChange={event => setContent(event.target.value)}
-            rows={5}
-            placeholder="Текст відгуку"
-            className="rounded-2xl border border-white/10 bg-white/[.04] p-4 outline-none"
-          />
+          <select value={source} onChange={event => setSource(event.target.value)} className="rounded-xl border border-white/10 bg-[#4c061c] p-3"><option>Instagram</option><option>Google</option><option>ChoiceQR</option><option>Glovo</option><option>Bolt</option><option>Інше</option></select>
+          <input value={author} onChange={event => setAuthor(event.target.value)} placeholder="Автор або нік" className="rounded-xl border border-white/10 bg-white/[.04] p-3 outline-none" />
+          <input value={url} onChange={event => setUrl(event.target.value)} placeholder="Посилання на оригінал — необов’язково" className="rounded-xl border border-white/10 bg-white/[.04] p-3 outline-none" />
+          <select value={rating ?? ''} onChange={event => setRating(event.target.value ? Number(event.target.value) : null)} className="rounded-xl border border-white/10 bg-[#4c061c] p-3"><option value="">Без оцінки</option>{[5, 4, 3, 2, 1].map(value => <option key={value} value={value}>{value} зірок</option>)}</select>
+          <textarea value={content} onChange={event => setContent(event.target.value)} rows={5} placeholder="Текст відгуку" className="rounded-2xl border border-white/10 bg-white/[.04] p-4 outline-none" />
         </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/10 px-4 py-3 font-black"
-          >
-            Скасувати
-          </button>
-          <button
-            type="button"
-            disabled={!content.trim()}
-            onClick={() =>
-              onAdd({
-                id: `manual-${Date.now()}`,
-                source,
-                date: new Date().toISOString().slice(0, 10),
-                url: '',
-                author: author || 'Без імені',
-                rating,
-                content,
-                images: [],
-                status: 'needs_reply',
-                reply: '',
-                internalNote: '',
-                assignee: '',
-                respondedAt: '',
-                tags: [],
-              })
-            }
-            className="rounded-xl bg-[#cfeeed] px-4 py-3 font-black text-[#531027] disabled:opacity-40"
-          >
-            Додати
-          </button>
-        </div>
+        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-3 font-black">Скасувати</button><button type="button" disabled={!content.trim() || saving} onClick={() => void add()} className="rounded-xl bg-[#cfeeed] px-4 py-3 font-black text-[#531027] disabled:opacity-40">{saving ? 'Додаємо…' : 'Додати'}</button></div>
       </div>
     </div>
   );
