@@ -60,26 +60,51 @@ jobs:
             printf '{"general":[],"dishes":[]}' > public/data.json
           fi
 
-      - name: Fetch Sales BI snapshot
+      - name: Fetch and validate Sales BI snapshot
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p public tmp
           CACHE_BUST="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
           TEMP_FILE="tmp/sales-data.json"
-          FALLBACK='{"ok":true,"schemaVersion":2,"summary":{"orders":0,"revenue":0,"margin":0,"avgCheck":0},"daily":[],"channels":[],"channelsDaily":[],"hourly":[],"hourlyDaily":[],"products":[],"productsDaily":[],"heatmap":[],"operatingHours":{"open":10,"close":22},"dataQuality":{"fallback":true}}'
-          if curl --fail --location --silent --show-error --retry 2 --retry-delay 5 "${MARMOO_SALES_DATA_URL}?_=${CACHE_BUST}" --output "$TEMP_FILE"; then
-            if node - "$TEMP_FILE" <<'NODE'
+
+          echo "Downloading Sales BI snapshot..."
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-delay 5 --max-time 120 \
+            "${MARMOO_SALES_DATA_URL}?_=${CACHE_BUST}" \
+            --output "$TEMP_FILE"
+
+          node - "$TEMP_FILE" <<'NODE'
           const fs = require('fs');
           const raw = fs.readFileSync(process.argv[2], 'utf8').trim();
-          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) process.exit(1);
+
+          if (!raw) throw new Error('Sales API returned an empty response');
+          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html') || raw.startsWith('<')) {
+            throw new Error('Sales API returned HTML instead of JSON');
+          }
+
           const p = JSON.parse(raw);
-          if (Number(p.schemaVersion) !== 2) process.exit(1);
+          if (Number(p.schemaVersion) !== 2) {
+            throw new Error(`Sales API schema mismatch: expected 2, got ${p.schemaVersion}`);
+          }
+
+          const requiredArrays = ['daily', 'channels', 'channelsDaily', 'products', 'productsDaily'];
+          for (const key of requiredArrays) {
+            if (!Array.isArray(p[key])) throw new Error(`Sales API payload is missing ${key}[]`);
+          }
+
+          if (!p.daily.length || !p.channelsDaily.length || !p.productsDaily.length) {
+            throw new Error(
+              `Sales API returned no business data: daily=${p.daily.length}, channelsDaily=${p.channelsDaily.length}, productsDaily=${p.productsDaily.length}. Refusing to overwrite the last good BI snapshot.`
+            );
+          }
+
+          console.log(
+            `Sales BI OK: daily=${p.daily.length}, channels=${p.channels.length}, channelsDaily=${p.channelsDaily.length}, products=${p.products.length}, productsDaily=${p.productsDaily.length}`
+          );
           NODE
-            then mv "$TEMP_FILE" public/sales-data.json; else printf '%s' "$FALLBACK" > public/sales-data.json; fi
-          else
-            printf '%s' "$FALLBACK" > public/sales-data.json
-          fi
+
+          mv "$TEMP_FILE" public/sales-data.json
 
       - name: Check Reviews API
         shell: bash
