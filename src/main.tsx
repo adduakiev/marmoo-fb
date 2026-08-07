@@ -20,20 +20,32 @@ import './index.css';
 type RouteName = 'form' | 'dashboard' | 'dashboard_reviews' | 'dashboard_sales' | 'dashboard_menu' | 'dashboard_channels' | 'dashboard_executive' | 'dashboard_daypart' | 'dashboard_weekday' | 'dashboard_categories';
 type IntelligenceRoute = Exclude<RouteName, 'form'>;
 
+const INTELLIGENCE_ROUTES = new Set<IntelligenceRoute>([
+  'dashboard',
+  'dashboard_reviews',
+  'dashboard_sales',
+  'dashboard_menu',
+  'dashboard_channels',
+  'dashboard_executive',
+  'dashboard_daypart',
+  'dashboard_weekday',
+  'dashboard_categories',
+]);
+
+function asRoute(value: string | null | undefined): RouteName | null {
+  if (!value) return null;
+  const normalized = value.trim() as IntelligenceRoute;
+  return INTELLIGENCE_ROUTES.has(normalized) ? normalized : null;
+}
+
 function resolveRoute(): RouteName {
   const searchParams = new URLSearchParams(window.location.search);
-  const viewParam = searchParams.get('view');
-  const hash = window.location.hash.replace(/^#\/?/, '').replace(/\?.*$/, '').trim();
-  if (viewParam === 'dashboard_reviews' || hash === 'dashboard_reviews') return 'dashboard_reviews';
-  if (viewParam === 'dashboard_categories' || hash === 'dashboard_categories') return 'dashboard_categories';
-  if (viewParam === 'dashboard_weekday' || hash === 'dashboard_weekday') return 'dashboard_weekday';
-  if (viewParam === 'dashboard_daypart' || hash === 'dashboard_daypart') return 'dashboard_daypart';
-  if (viewParam === 'dashboard_executive' || hash === 'dashboard_executive') return 'dashboard_executive';
-  if (viewParam === 'dashboard_channels' || hash === 'dashboard_channels') return 'dashboard_channels';
-  if (viewParam === 'dashboard_menu' || hash === 'dashboard_menu') return 'dashboard_menu';
-  if (viewParam === 'dashboard_sales' || hash === 'dashboard_sales') return 'dashboard_sales';
-  if (viewParam === 'dashboard' || hash === 'dashboard') return 'dashboard';
-  return 'form';
+  const hashRoute = asRoute(window.location.hash.replace(/^#\/?/, '').replace(/\?.*$/, ''));
+  const queryRoute = asRoute(searchParams.get('view'));
+
+  // Prefer the hash when both are present so old links like
+  // ?view=dashboard_reviews#dashboard_executive still navigate correctly.
+  return hashRoute || queryRoute || 'form';
 }
 
 function IntelligenceShell({ route, children }: { route: IntelligenceRoute; children: ReactNode }) {
