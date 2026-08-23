@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "generated_at": "2026-08-22T09:17:32.155Z",
+  "generated_at": "2026-08-23T09:17:35.647Z",
   "timezone": "Europe/Kyiv",
   "scheduled_update": "12:00 Europe/Kyiv",
   "source_url": "https://marmooolymp.choiceqr.com/online-menu",
@@ -13,10 +13,10 @@
   "json_responses_inspected": 10,
   "dom_candidates": 0,
   "sitemap_url": "https://marmooolymp.choiceqr.com/sitemap.xml",
-  "sitemap_direct_dish_urls_found": 354,
+  "sitemap_direct_dish_urls_found": 352,
   "dish_urls_matched": 9,
   "dish_urls_unmatched": 67,
-  "dish_urls_updated_at": "2026-08-22T09:17:33.637Z",
+  "dish_urls_updated_at": "2026-08-23T09:17:36.778Z",
   "dish_url_status": "degraded",
   "dish_url_warning": "Only 9 direct dish URLs matched",
   "dish_url_rule": "Only /section:<section>/<dish> direct pages are accepted"
