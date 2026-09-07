@@ -15,6 +15,7 @@ import {
   UserRound,
   X,
   ZoomIn,
+  Trash2,
 } from 'lucide-react';
 import {
   bulkUpsertSharedReviews,
@@ -782,7 +783,18 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
             </label>
 
             <div className="mt-6 flex flex-col-reverse gap-2 border-t border-white/[.08] pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs text-white/28">{review.updatedAt ? `Остання зміна: ${review.updatedAt}` : 'Зміни синхронізуються зі спільною базою'}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Ви дійсно хочете видалити цей відгук?")) {
+                    onSave({ status: "closed" });
+                    onClose();
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-3.5 py-2.5 text-xs font-black text-rose-300 hover:bg-rose-500/20 transition"
+              >
+                <Trash2 size={14} /> Видалити
+              </button>
               <div className="flex gap-2">
                 <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black text-white/55 transition hover:bg-white/[.05] hover:text-white">Закрити</button>
                 <button type="button" onClick={() => void save()} disabled={saving} className="inline-flex min-w-[145px] items-center justify-center gap-2 rounded-2xl bg-[#cfeeed] px-5 py-3 text-sm font-black text-[#531027] transition hover:bg-[#e2f8f6] disabled:opacity-50">{saving ? <><RefreshCw size={15} className="animate-spin" /> Зберігаємо…</> : <><CheckCircle2 size={15} /> Зберегти</>}</button>
@@ -850,18 +862,21 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
   ];
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#160109]/78 p-4 backdrop-blur-md">
-      <div className="w-full max-w-xl overflow-hidden rounded-[28px] border border-white/12 bg-[#350313] text-white shadow-[0_35px_100px_rgba(0,0,0,.45)]">
-        <div className="flex items-center justify-between border-b border-white/[.08] bg-white/[.025] px-6 py-5">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#160109]/82 p-3 sm:p-4 backdrop-blur-md">
+      <div className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-white/12 bg-[#350313] text-white shadow-[0_35px_100px_rgba(0,0,0,.5)]">
+        {/* Fixed Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-white/[.08] bg-white/[.025] px-6 py-4">
           <div>
             <div className="text-[10px] font-black uppercase tracking-[.16em] text-[#cfeeed]/45">Manual review</div>
-            <h2 className="mt-1 text-xl font-black">Додати відгук</h2>
+            <h2 className="mt-0.5 text-xl font-black">Додати відгук</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/[.06] hover:text-white">
             <X size={19} />
           </button>
         </div>
-        <div className="grid gap-3.5 p-6">
+
+        {/* Scrollable Form Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-3.5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Джерело</label>
@@ -878,7 +893,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
                 type="date"
                 value={reviewDate}
                 onChange={event => setReviewDate(event.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3 text-sm font-semibold text-white outline-none transition hover:border-white/20 [color-scheme:dark]"
+                className="w-full rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3.5 text-sm font-semibold text-white outline-none transition hover:border-white/20 [color-scheme:dark]"
               />
             </div>
           </div>
@@ -920,7 +935,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
             <textarea
               value={content}
               onChange={event => setContent(event.target.value)}
-              rows={4}
+              rows={3}
               placeholder="Введіть текст відгуку..."
               className="w-full rounded-[18px] border border-white/10 bg-white/[.04] p-4 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30 resize-none"
             />
@@ -937,7 +952,9 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-white/[.08] px-6 py-4">
+
+        {/* Fixed Always-Visible Footer */}
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/[.08] bg-[#350313] px-6 py-4">
           <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 font-black text-white/55 hover:bg-white/[.05] hover:text-white">
             Скасувати
           </button>
@@ -945,7 +962,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
             type="button"
             disabled={!content.trim() || saving}
             onClick={() => void add()}
-            className="rounded-2xl bg-[#cfeeed] px-5 py-3 font-black text-[#531027] disabled:opacity-40 hover:bg-[#e0f7f5] transition"
+            className="rounded-2xl bg-[#cfeeed] px-5 py-3 font-black text-[#531027] disabled:opacity-40 hover:bg-[#e0f7f5] transition shadow-lg"
           >
             {saving ? "Додаємо…" : "Додати"}
           </button>
