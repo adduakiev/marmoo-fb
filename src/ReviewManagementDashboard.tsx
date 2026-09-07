@@ -500,14 +500,18 @@ export default function ReviewManagementDashboard() {
               { id: "closed", label: "Закрито" },
             ]}
           />
-          <select
-            value={rating}
-            onChange={event => setRating(event.target.value)}
-            className="rounded-2xl border border-white/10 bg-[#4c061c] px-3 py-3.5 text-sm outline-none"
-          >
-            <option value="all">Усі оцінки</option>
-            {[5, 4, 3, 2, 1].map(value => <option key={value} value={value}>{value} зірок</option>)}
-          </select>
+          <CustomDropdown
+            value={typeof rating === "object" || rating === null ? "all" : String(rating)}
+            onChange={(val) => setRating(val === "all" ? "all" : Number(val))}
+            options={[
+              { id: "all", label: "Усі оцінки" },
+              { id: "5", label: "5 зірок ⭐️⭐️⭐️⭐️⭐️" },
+              { id: "4", label: "4 зірки ⭐️⭐️⭐️⭐️" },
+              { id: "3", label: "3 зірки ⭐️⭐️⭐️" },
+              { id: "2", label: "2 зірки ⭐️⭐️" },
+              { id: "1", label: "1 зірка ⭐️" },
+            ]}
+          />
         </div>
       </section>
 
