@@ -490,19 +490,8 @@ export default function ReviewManagementDashboard() {
             />
           </label>
           <CustomDropdown
-            value={status}
-            onChange={(val) => setStatus(val)}
-            options={[
-              { id: "all", label: "Усі статуси" },
-              { id: "needs_reply", label: "Без відповіді" },
-              { id: "draft", label: "Чернетка" },
-              { id: "replied", label: "Відповідь надіслана" },
-              { id: "closed", label: "Закрито" },
-            ]}
-          />
-          <CustomDropdown
-            value={typeof rating === "object" || rating === null ? "all" : String(rating)}
-            onChange={(val) => setRating(val === "all" ? "all" : Number(val))}
+            value={String(rating)}
+            onChange={(val) => setRating(val)}
             options={[
               { id: "all", label: "Усі оцінки" },
               { id: "5", label: "5 зірок ⭐️⭐️⭐️⭐️⭐️" },
