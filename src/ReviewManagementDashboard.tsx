@@ -710,9 +710,11 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
 function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Review) => Promise<void> }) {
   const [source, setSource] = useState('Instagram');
   const [author, setAuthor] = useState('');
+  const [reviewDate, setReviewDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [content, setContent] = useState('');
   const [rating, setRating] = useState<number | null>(null);
   const [url, setUrl] = useState('');
+  const [internalNote, setInternalNote] = useState('');
   const [saving, setSaving] = useState(false);
 
   const add = async () => {
@@ -721,7 +723,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
       await onAdd({
         id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         source,
-        date: new Date().toISOString().slice(0, 10),
+        date: reviewDate || new Date().toISOString().slice(0, 10),
         url,
         author: author || 'Без імені',
         rating,
@@ -729,7 +731,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
         images: [],
         status: 'needs_reply',
         reply: '',
-        internalNote: '',
+        internalNote,
         assignee: '',
         respondedAt: '',
         createdAt: new Date().toISOString(),
@@ -744,15 +746,95 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#160109]/78 p-4 backdrop-blur-md">
       <div className="w-full max-w-xl overflow-hidden rounded-[28px] border border-white/12 bg-[#350313] text-white shadow-[0_35px_100px_rgba(0,0,0,.45)]">
-        <div className="flex items-center justify-between border-b border-white/[.08] bg-white/[.025] px-6 py-5"><div><div className="text-[10px] font-black uppercase tracking-[.16em] text-[#cfeeed]/45">Manual review</div><h2 className="mt-1 text-xl font-black">Додати відгук</h2></div><button type="button" onClick={onClose} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/[.06] hover:text-white"><X size={19} /></button></div>
-        <div className="grid gap-3 p-6">
-          <select value={source} onChange={event => setSource(event.target.value)} className="rounded-2xl border border-white/10 bg-[#4c061c] p-3.5 outline-none"><option>Instagram</option><option>Google</option><option>ChoiceQR</option><option>Glovo</option><option>Bolt</option><option>Інше</option></select>
-          <input value={author} onChange={event => setAuthor(event.target.value)} placeholder="Автор або нік" className="rounded-2xl border border-white/10 bg-white/[.04] p-3.5 outline-none placeholder:text-white/25" />
-          <div className="relative"><Link2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" /><input value={url} onChange={event => setUrl(event.target.value)} placeholder="Посилання на оригінал — необов’язково" className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 outline-none placeholder:text-white/25" /></div>
-          <select value={rating ?? ''} onChange={event => setRating(event.target.value ? Number(event.target.value) : null)} className="rounded-2xl border border-white/10 bg-[#4c061c] p-3.5 outline-none"><option value="">Без оцінки</option>{[5, 4, 3, 2, 1].map(value => <option key={value} value={value}>{value} зірок</option>)}</select>
-          <textarea value={content} onChange={event => setContent(event.target.value)} rows={6} placeholder="Текст відгуку" className="rounded-[18px] border border-white/10 bg-white/[.04] p-4 leading-6 outline-none placeholder:text-white/25" />
+        <div className="flex items-center justify-between border-b border-white/[.08] bg-white/[.025] px-6 py-5">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[.16em] text-[#cfeeed]/45">Manual review</div>
+            <h2 className="mt-1 text-xl font-black">Додати відгук</h2>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/[.06] hover:text-white">
+            <X size={19} />
+          </button>
         </div>
-        <div className="flex justify-end gap-2 border-t border-white/[.08] px-6 py-4"><button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 font-black text-white/55 hover:bg-white/[.05] hover:text-white">Скасувати</button><button type="button" disabled={!content.trim() || saving} onClick={() => void add()} className="rounded-2xl bg-[#cfeeed] px-5 py-3 font-black text-[#531027] disabled:opacity-40">{saving ? 'Додаємо…' : 'Додати'}</button></div>
+        <div className="grid gap-3 p-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <select
+              value={source}
+              onChange={event => setSource(event.target.value)}
+              className="w-full rounded-2xl border border-white/10 bg-[#4c061c] p-3.5 text-white outline-none cursor-pointer [color-scheme:dark]"
+            >
+              <option className="bg-[#350313] text-white">Instagram</option>
+              <option className="bg-[#350313] text-white">Google</option>
+              <option className="bg-[#350313] text-white">ChoiceQR</option>
+              <option className="bg-[#350313] text-white">Glovo</option>
+              <option className="bg-[#350313] text-white">Bolt</option>
+              <option className="bg-[#350313] text-white">Інше</option>
+            </select>
+
+            <input
+              type="date"
+              value={reviewDate}
+              onChange={event => setReviewDate(event.target.value)}
+              className="w-full rounded-2xl border border-white/10 bg-white/[.04] p-3.5 text-white outline-none [color-scheme:dark]"
+            />
+          </div>
+
+          <input
+            value={author}
+            onChange={event => setAuthor(event.target.value)}
+            placeholder="Автор або нік"
+            className="rounded-2xl border border-white/10 bg-white/[.04] p-3.5 text-white outline-none placeholder:text-white/25"
+          />
+
+          <div className="relative">
+            <Link2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+            <input
+              value={url}
+              onChange={event => setUrl(event.target.value)}
+              placeholder="Посилання на оригінал — необов’язково"
+              className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-white outline-none placeholder:text-white/25"
+            />
+          </div>
+
+          <select
+            value={rating ?? ""}
+            onChange={event => setRating(event.target.value ? Number(event.target.value) : null)}
+            className="rounded-2xl border border-white/10 bg-[#4c061c] p-3.5 text-white outline-none cursor-pointer [color-scheme:dark]"
+          >
+            <option value="" className="bg-[#350313] text-white">Без оцінки</option>
+            {[5, 4, 3, 2, 1].map(value => (
+              <option key={value} value={value} className="bg-[#350313] text-white">{value} зірок</option>
+            ))}
+          </select>
+
+          <textarea
+            value={content}
+            onChange={event => setContent(event.target.value)}
+            rows={4}
+            placeholder="Текст відгуку"
+            className="rounded-[18px] border border-white/10 bg-white/[.04] p-4 text-white leading-6 outline-none placeholder:text-white/25"
+          />
+
+          <textarea
+            value={internalNote}
+            onChange={event => setInternalNote(event.target.value)}
+            rows={2}
+            placeholder="Вирішення ситуації / Внутрішній коментар (необов’язково)"
+            className="rounded-[18px] border border-white/10 bg-white/[.04] p-3.5 text-sm text-white leading-6 outline-none placeholder:text-white/25"
+          />
+        </div>
+        <div className="flex justify-end gap-2 border-t border-white/[.08] px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 font-black text-white/55 hover:bg-white/[.05] hover:text-white">
+            Скасувати
+          </button>
+          <button
+            type="button"
+            disabled={!content.trim() || saving}
+            onClick={() => void add()}
+            className="rounded-2xl bg-[#cfeeed] px-5 py-3 font-black text-[#531027] disabled:opacity-40"
+          >
+            {saving ? "Додаємо…" : "Додати"}
+          </button>
+        </div>
       </div>
     </div>
   );
