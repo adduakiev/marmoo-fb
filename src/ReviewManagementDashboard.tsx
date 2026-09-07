@@ -1,3 +1,38 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clipboard,
+  ExternalLink,
+  Image as ImageIcon,
+  Link2,
+  MessageSquareText,
+  Plus,
+  RefreshCw,
+  Search,
+  UserRound,
+  X,
+  ZoomIn,
+} from 'lucide-react';
+import {
+  bulkUpsertSharedReviews,
+  createSharedReview,
+  hasSharedReviewsApi,
+  listSharedReviews,
+  type SharedReview,
+  type SharedReviewStatus,
+  updateSharedReview,
+} from './reviewsApi';
+
+interface CustomDropdownProps<T> {
+  value: T;
+  onChange: (val: T) => void;
+  options: { id: T; label: string; badge?: string }[];
+  placeholder?: string;
+  className?: string;
+}
 
 function CustomDropdown<T extends string | number | null>({
   value,
@@ -5,13 +40,7 @@ function CustomDropdown<T extends string | number | null>({
   options,
   placeholder = "Обрати...",
   className = "",
-}: {
-  value: T;
-  onChange: (val: T) => void;
-  options: { id: T; label: string; badge?: string }[];
-  placeholder?: string;
-  className?: string;
-}) {
+}: CustomDropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -66,87 +95,6 @@ function CustomDropdown<T extends string | number | null>({
     </div>
   );
 }
-
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selected = options.find(o => o.id === value) || options[0];
-
-  return (
-    <div ref={ref} className="relative w-full">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-[#5a0823] outline-none"
-      >
-        <span className="truncate">{selected?.label || placeholder}</span>
-        <ChevronRight size={16} className={`text-white/40 transition-transform duration-200 ${open ? "-rotate-90" : "rotate-90"}`} />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-full min-w-[180px] overflow-hidden rounded-2xl border border-white/15 bg-[#3a0414]/95 p-1.5 text-sm text-white shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-          {options.map((opt) => {
-            const active = opt.id === value;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => {
-                  onChange(opt.id);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                  active ? "bg-[#cfeeed] text-[#531027] font-black" : "text-white/80 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <span>{opt.label}</span>
-                {opt.badge && (
-                  <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${active ? "bg-[#531027]/20 text-[#531027]" : "bg-white/10 text-white/60"}`}>
-                    {opt.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  CalendarDays,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Clipboard,
-  ExternalLink,
-  Image as ImageIcon,
-  Link2,
-  MessageSquareText,
-  Plus,
-  RefreshCw,
-  Search,
-  UserRound,
-  X,
-  ZoomIn,
-} from 'lucide-react';
-import {
-  bulkUpsertSharedReviews,
-  createSharedReview,
-  hasSharedReviewsApi,
-  listSharedReviews,
-  type SharedReview,
-  type SharedReviewStatus,
-  updateSharedReview,
-} from './reviewsApi';
 
 type Status = SharedReviewStatus;
 type Review = SharedReview;
@@ -557,19 +505,19 @@ export default function ReviewManagementDashboard() {
 
           <CustomDropdown
             value={status}
-            onChange={(val) => setStatus(val as any)}
+            onChange={(val) => setStatus(val as 'all' | Status)}
             options={[
               { id: "all", label: "Усі статуси" },
               { id: "needs_reply", label: "Без відповіді" },
               { id: "draft", label: "Чернетка" },
-              { id: "replied", label: "Відповідь надіслана" },
+              { id: "sent", label: "Відповідь надіслана" },
               { id: "closed", label: "Закрито" },
             ]}
           />
 
           <CustomDropdown
-            value={rating === null ? "all" : String(rating)}
-            onChange={(val) => setRating(val === "all" ? "all" : (val as any))}
+            value={rating}
+            onChange={(val) => setRating(val)}
             options={[
               { id: "all", label: "Усі оцінки" },
               { id: "5", label: "5 зірок ⭐️⭐️⭐️⭐️⭐️" },
@@ -794,17 +742,18 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/40">
                 Статус опрацювання
-                <CustomDropdown
-            value={status}
-            onChange={(val) => setStatus(val)}
-            options={[
-              { id: "all", label: "Усі статуси" },
-              { id: "needs_reply", label: "Без відповіді" },
-              { id: "draft", label: "Чернетка" },
-              { id: "replied", label: "Відповідь надіслана" },
-              { id: "closed", label: "Закрито" },
-            ]}
-          />
+                <div className="mt-2">
+                  <CustomDropdown
+                    value={status}
+                    onChange={(val) => setStatus(val as Status)}
+                    options={[
+                      { id: "needs_reply", label: "Без відповіді" },
+                      { id: "draft", label: "Чернетка" },
+                      { id: "sent", label: "Відповідь надіслана" },
+                      { id: "closed", label: "Закрито" },
+                    ]}
+                  />
+                </div>
               </label>
               <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/40">
                 Відповідальний
