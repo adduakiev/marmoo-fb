@@ -1,7 +1,72 @@
 
-function CustomDropdown({ value, onChange, options, placeholder }: { value: string; onChange: (val: any) => void; options: { id: string; label: string; badge?: string }[]; placeholder?: string }) {
+function CustomDropdown<T extends string | number | null>({
+  value,
+  onChange,
+  options,
+  placeholder = "Обрати...",
+  className = "",
+}: {
+  value: T;
+  onChange: (val: T) => void;
+  options: { id: T; label: string; badge?: string }[];
+  placeholder?: string;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selected = options.find((o) => String(o.id) === String(value)) || options[0];
+
+  return (
+    <div ref={ref} className={`relative w-full ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3.5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-[#5a0823] outline-none"
+      >
+        <span className="truncate">{selected?.label || placeholder}</span>
+        <ChevronRight size={16} className={`text-white/40 transition-transform duration-200 ${open ? "-rotate-90" : "rotate-90"}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-2 w-full min-w-[180px] overflow-hidden rounded-2xl border border-white/15 bg-[#3a0414]/95 p-1.5 text-sm text-white shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+          {options.map((opt) => {
+            const active = String(opt.id) === String(value);
+            return (
+              <button
+                key={String(opt.id)}
+                type="button"
+                onClick={() => {
+                  onChange(opt.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
+                  active ? "bg-[#cfeeed] text-[#531027] font-black" : "text-white/80 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <span>{opt.label}</span>
+                {opt.badge && (
+                  <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${active ? "bg-[#531027]/20 text-[#531027]" : "bg-white/10 text-white/60"}`}>
+                    {opt.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -479,7 +544,7 @@ export default function ReviewManagementDashboard() {
       </section>
 
       <section className="sticky top-2 z-20 mt-4 rounded-[22px] border border-white/10 bg-[#3f0618]/90 p-3 shadow-[0_14px_40px_rgba(0,0,0,.18)] backdrop-blur-xl">
-        <div className="grid gap-2 md:grid-cols-[1fr_190px_150px]">
+        <div className="grid gap-2 md:grid-cols-[1fr_190px_170px]">
           <label className="relative">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/35" />
             <input
@@ -489,9 +554,22 @@ export default function ReviewManagementDashboard() {
               className="w-full rounded-2xl border border-white/10 bg-white/[.045] py-3.5 pl-10 pr-3 text-sm outline-none transition placeholder:text-white/28 focus:border-[#cfeeed]/30 focus:bg-white/[.065]"
             />
           </label>
+
           <CustomDropdown
-            value={String(rating)}
-            onChange={(val) => setRating(val)}
+            value={status}
+            onChange={(val) => setStatus(val as any)}
+            options={[
+              { id: "all", label: "Усі статуси" },
+              { id: "needs_reply", label: "Без відповіді" },
+              { id: "draft", label: "Чернетка" },
+              { id: "replied", label: "Відповідь надіслана" },
+              { id: "closed", label: "Закрито" },
+            ]}
+          />
+
+          <CustomDropdown
+            value={rating === null ? "all" : String(rating)}
+            onChange={(val) => setRating(val === "all" ? "all" : (val as any))}
             options={[
               { id: "all", label: "Усі оцінки" },
               { id: "5", label: "5 зірок ⭐️⭐️⭐️⭐️⭐️" },
@@ -769,13 +847,13 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
 }
 
 function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Review) => Promise<void> }) {
-  const [source, setSource] = useState('Instagram');
-  const [author, setAuthor] = useState('');
+  const [source, setSource] = useState("Instagram");
+  const [author, setAuthor] = useState("");
   const [reviewDate, setReviewDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
   const [rating, setRating] = useState<number | null>(null);
-  const [url, setUrl] = useState('');
-  const [internalNote, setInternalNote] = useState('');
+  const [url, setUrl] = useState("");
+  const [internalNote, setInternalNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   const add = async () => {
@@ -786,23 +864,41 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
         source,
         date: reviewDate || new Date().toISOString().slice(0, 10),
         url,
-        author: author || 'Без імені',
+        author: author || "Без імені",
         rating,
         content,
         images: [],
-        status: 'needs_reply',
-        reply: '',
+        status: "needs_reply",
+        reply: "",
         internalNote,
-        assignee: '',
-        respondedAt: '',
+        assignee: "",
+        respondedAt: "",
         createdAt: new Date().toISOString(),
-        updatedAt: '',
+        updatedAt: "",
         tags: [],
       });
     } finally {
       setSaving(false);
     }
   };
+
+  const sourceOptions = [
+    { id: "Instagram", label: "Instagram" },
+    { id: "Google", label: "Google Maps" },
+    { id: "ChoiceQR", label: "ChoiceQR" },
+    { id: "Glovo", label: "Glovo" },
+    { id: "Bolt", label: "Bolt Food" },
+    { id: "Інше", label: "Інше" },
+  ];
+
+  const ratingOptions: { id: number | null; label: string }[] = [
+    { id: null, label: "Без оцінки" },
+    { id: 5, label: "5 зірок ⭐️⭐️⭐️⭐️⭐️" },
+    { id: 4, label: "4 зірки ⭐️⭐️⭐️⭐️" },
+    { id: 3, label: "3 зірки ⭐️⭐️⭐️" },
+    { id: 2, label: "2 зірки ⭐️⭐️" },
+    { id: 1, label: "1 зірка ⭐️" },
+  ];
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#160109]/78 p-4 backdrop-blur-md">
@@ -816,72 +912,81 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
             <X size={19} />
           </button>
         </div>
-        <div className="grid gap-3 p-6">
+        <div className="grid gap-3.5 p-6">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <select
-              value={source}
-              onChange={event => setSource(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-[#4c061c] p-3.5 text-white outline-none cursor-pointer [color-scheme:dark]"
-            >
-              <option className="bg-[#350313] text-white">Instagram</option>
-              <option className="bg-[#350313] text-white">Google</option>
-              <option className="bg-[#350313] text-white">ChoiceQR</option>
-              <option className="bg-[#350313] text-white">Glovo</option>
-              <option className="bg-[#350313] text-white">Bolt</option>
-              <option className="bg-[#350313] text-white">Інше</option>
-            </select>
+            <div>
+              <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Джерело</label>
+              <CustomDropdown
+                value={source}
+                onChange={(val) => setSource(val)}
+                options={sourceOptions}
+              />
+            </div>
 
+            <div>
+              <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Дата відгуку</label>
+              <input
+                type="date"
+                value={reviewDate}
+                onChange={event => setReviewDate(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3 text-sm font-semibold text-white outline-none transition hover:border-white/20 [color-scheme:dark]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Автор або нік</label>
             <input
-              type="date"
-              value={reviewDate}
-              onChange={event => setReviewDate(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-white/[.04] p-3.5 text-white outline-none [color-scheme:dark]"
+              value={author}
+              onChange={event => setAuthor(event.target.value)}
+              placeholder="наприклад: @alex_kyiv"
+              className="w-full rounded-2xl border border-white/10 bg-white/[.04] p-3.5 text-sm font-medium text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30"
             />
           </div>
 
-          <input
-            value={author}
-            onChange={event => setAuthor(event.target.value)}
-            placeholder="Автор або нік"
-            className="rounded-2xl border border-white/10 bg-white/[.04] p-3.5 text-white outline-none placeholder:text-white/25"
-          />
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Посилання (необов’язково)</label>
+            <div className="relative">
+              <Link2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+              <input
+                value={url}
+                onChange={event => setUrl(event.target.value)}
+                placeholder="https://instagram.com/p/..."
+                className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm font-medium text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30"
+              />
+            </div>
+          </div>
 
-          <div className="relative">
-            <Link2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
-            <input
-              value={url}
-              onChange={event => setUrl(event.target.value)}
-              placeholder="Посилання на оригінал — необов’язково"
-              className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-white outline-none placeholder:text-white/25"
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Оцінка</label>
+            <CustomDropdown
+              value={rating}
+              onChange={(val) => setRating(val)}
+              options={ratingOptions}
             />
           </div>
 
-          <select
-            value={rating ?? ""}
-            onChange={event => setRating(event.target.value ? Number(event.target.value) : null)}
-            className="rounded-2xl border border-white/10 bg-[#4c061c] p-3.5 text-white outline-none cursor-pointer [color-scheme:dark]"
-          >
-            <option value="" className="bg-[#350313] text-white">Без оцінки</option>
-            {[5, 4, 3, 2, 1].map(value => (
-              <option key={value} value={value} className="bg-[#350313] text-white">{value} зірок</option>
-            ))}
-          </select>
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Текст відгуку</label>
+            <textarea
+              value={content}
+              onChange={event => setContent(event.target.value)}
+              rows={4}
+              placeholder="Введіть текст відгуку..."
+              className="w-full rounded-[18px] border border-white/10 bg-white/[.04] p-4 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30 resize-none"
+            />
+          </div>
 
-          <textarea
-            value={content}
-            onChange={event => setContent(event.target.value)}
-            rows={4}
-            placeholder="Текст відгуку"
-            className="rounded-[18px] border border-white/10 bg-white/[.04] p-4 text-white leading-6 outline-none placeholder:text-white/25"
-          />
-
-          <textarea
-            value={internalNote}
-            onChange={event => setInternalNote(event.target.value)}
-            rows={2}
-            placeholder="Вирішення ситуації / Внутрішній коментар (необов’язково)"
-            className="rounded-[18px] border border-white/10 bg-white/[.04] p-3.5 text-sm text-white leading-6 outline-none placeholder:text-white/25"
-          />
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-wider text-[#cfeeed]/60 mb-1.5">Вирішення ситуації / Внутрішній коментар</label>
+            <textarea
+              value={internalNote}
+              onChange={event => setInternalNote(event.target.value)}
+              rows={2}
+              placeholder="Наприклад: Надано компенсацію 200грн, кухар попереджений..."
+              className="w-full rounded-[18px] border border-white/10 bg-white/[.04] p-3.5 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30 resize-none"
+            />
+          </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-white/[.08] px-6 py-4">
           <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 font-black text-white/55 hover:bg-white/[.05] hover:text-white">
@@ -891,7 +996,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
             type="button"
             disabled={!content.trim() || saving}
             onClick={() => void add()}
-            className="rounded-2xl bg-[#cfeeed] px-5 py-3 font-black text-[#531027] disabled:opacity-40"
+            className="rounded-2xl bg-[#cfeeed] px-5 py-3 font-black text-[#531027] disabled:opacity-40 hover:bg-[#e0f7f5] transition"
           >
             {saving ? "Додаємо…" : "Додати"}
           </button>
