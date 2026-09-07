@@ -1,3 +1,60 @@
+
+function CustomDropdown({ value, onChange, options, placeholder }: { value: string; onChange: (val: any) => void; options: { id: string; label: string; badge?: string }[]; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selected = options.find(o => o.id === value) || options[0];
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-[#5a0823] outline-none"
+      >
+        <span className="truncate">{selected?.label || placeholder}</span>
+        <ChevronRight size={16} className={`text-white/40 transition-transform duration-200 ${open ? "-rotate-90" : "rotate-90"}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-2 w-full min-w-[180px] overflow-hidden rounded-2xl border border-white/15 bg-[#3a0414]/95 p-1.5 text-sm text-white shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+          {options.map((opt) => {
+            const active = opt.id === value;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  onChange(opt.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
+                  active ? "bg-[#cfeeed] text-[#531027] font-black" : "text-white/80 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <span>{opt.label}</span>
+                {opt.badge && (
+                  <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${active ? "bg-[#531027]/20 text-[#531027]" : "bg-white/10 text-white/60"}`}>
+                    {opt.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
@@ -432,14 +489,17 @@ export default function ReviewManagementDashboard() {
               className="w-full rounded-2xl border border-white/10 bg-white/[.045] py-3.5 pl-10 pr-3 text-sm outline-none transition placeholder:text-white/28 focus:border-[#cfeeed]/30 focus:bg-white/[.065]"
             />
           </label>
-          <select
+          <CustomDropdown
             value={status}
-            onChange={event => setStatus(event.target.value as 'all' | Status)}
-            className="rounded-2xl border border-white/10 bg-[#4c061c] px-3 py-3.5 text-sm outline-none"
-          >
-            <option value="all">Усі статуси</option>
-            {Object.entries(STATUS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
+            onChange={(val) => setStatus(val)}
+            options={[
+              { id: "all", label: "Усі статуси" },
+              { id: "needs_reply", label: "Без відповіді" },
+              { id: "draft", label: "Чернетка" },
+              { id: "replied", label: "Відповідь надіслана" },
+              { id: "closed", label: "Закрито" },
+            ]}
+          />
           <select
             value={rating}
             onChange={event => setRating(event.target.value)}
@@ -663,9 +723,17 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/40">
                 Статус опрацювання
-                <select value={status} onChange={event => setStatus(event.target.value as Status)} className="mt-2 w-full rounded-2xl border border-white/10 bg-[#4c061c] p-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-[#cfeeed]/30">
-                  {Object.entries(STATUS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
+                <CustomDropdown
+            value={status}
+            onChange={(val) => setStatus(val)}
+            options={[
+              { id: "all", label: "Усі статуси" },
+              { id: "needs_reply", label: "Без відповіді" },
+              { id: "draft", label: "Чернетка" },
+              { id: "replied", label: "Відповідь надіслана" },
+              { id: "closed", label: "Закрито" },
+            ]}
+          />
               </label>
               <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/40">
                 Відповідальний
