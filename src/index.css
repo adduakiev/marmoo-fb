@@ -41,6 +41,18 @@ textarea {
   font: inherit;
 }
 
+/* Native review dropdown menus must keep readable contrast on Windows.
+   Without an explicit scheme Chrome opens a white popup while inheriting
+   the dashboard's white text, making unselected options nearly invisible. */
+.review-select {
+  color-scheme: dark;
+}
+
+.review-select option {
+  color: #fffaf7;
+  background-color: #3b0717;
+}
+
 button,
 a,
 select,
