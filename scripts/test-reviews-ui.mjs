@@ -80,4 +80,3 @@ for (const width of [1440,390]) {
   await page.close();console.log(`Reviews UI ${width}px: CRUD, error retention, cache outage and layout passed`);
 }
 } finally {await browser.close();}
-
