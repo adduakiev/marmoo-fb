@@ -18,7 +18,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
-  bulkUpsertSharedReviews,
   deleteSharedReview,
   createSharedReview,
   hasSharedReviewsApi,
@@ -90,8 +89,6 @@ const STATUS: Record<Status, string> = {
   closed: 'Закрито',
 };
 
-const clean = (value: unknown) => String(value ?? '').trim();
-
 const DEFAULT_BUSINESS: Business = {
   name: 'MARMOO бістро мармурової яловичини',
   address: 'вулиця Велика Васильківська, 57/3, Київ, 02000',
@@ -101,75 +98,6 @@ const DEFAULT_BUSINESS: Business = {
   latestReview: '2026-07-30',
   reviewsWithPhotos: 19,
 };
-
-function splitCsv(line: string): string[] {
-  const output: string[] = [];
-  let current = '';
-  let quoted = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-    if (character === '"' && line[index + 1] === '"') {
-      current += '"';
-      index += 1;
-      continue;
-    }
-    if (character === '"') {
-      quoted = !quoted;
-      continue;
-    }
-    if (character === ',' && !quoted) {
-      output.push(current);
-      current = '';
-      continue;
-    }
-    current += character;
-  }
-
-  output.push(current);
-  return output;
-}
-
-function parseCsv(raw: string): Review[] {
-  const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const headers = splitCsv(lines[0]);
-
-  return lines.slice(1).map((line, index) => {
-    const columns = splitCsv(line);
-    const row = Object.fromEntries(
-      headers.map((header, columnIndex) => [header, columns[columnIndex] ?? '']),
-    );
-    const url = clean(row['Review URL']);
-    const images = clean(row['Review image'])
-      .split(',')
-      .map(value => value.trim())
-      .filter(Boolean);
-
-    return {
-      id: url || `manual-${Date.now()}-${index}`,
-      source: 'Google',
-      date: clean(row['Review date']),
-      url,
-      author: clean(row['Author name']) || 'Без імені',
-      authorUrl: clean(row['Author URL']),
-      localGuide: clean(row['Local Guide']).toLowerCase() === 'true',
-      authorReviews: Number(row['Author reviews']) || 0,
-      rating: Number(row['Star rating']) || null,
-      content: clean(row['Review content']),
-      images,
-      video: clean(row['Review video']) || null,
-      status: 'needs_reply',
-      reply: '',
-      internalNote: '',
-      assignee: '',
-      respondedAt: '',
-      createdAt: clean(row['Review date']),
-      updatedAt: '',
-      tags: [],
-    };
-  });
-}
 
 const stars = (value: number | null) =>
   value ? `${'★'.repeat(value)}${'☆'.repeat(5 - value)}` : 'Без оцінки';
@@ -201,13 +129,11 @@ export default function ReviewManagementDashboard() {
   const [syncState, setSyncState] = useState<SyncState>('loading');
   const [syncMessage, setSyncMessage] = useState('Підключення до спільної бази…');
   const [lastSyncedAt, setLastSyncedAt] = useState('');
-  const input = useRef<HTMLInputElement>(null);
   const revision = useRef(0);
   const mutating = useRef(false);
   const reading = useRef(false);
   const [sourceFilter, setSourceFilter] = useState('all');
   const [order, setOrder] = useState('newest');
-  const [assigneeFilter, setAssigneeFilter] = useState('');
 
   const updateDataReviews = useCallback((reviews: Review[]) => {
     const sorted = sortReviews(reviews);
@@ -288,7 +214,6 @@ export default function ReviewManagementDashboard() {
         if (sourceFilter !== 'all' && review.source !== sourceFilter) return false;
         if (status !== 'all' && review.status !== status) return false;
         if (rating !== 'all' && review.rating !== (rating === 'none' ? null : Number(rating))) return false;
-        if (assigneeFilter && !review.assignee.toLowerCase().includes(assigneeFilter.trim().toLowerCase())) return false;
         const normalizedQuery = query.trim().toLowerCase();
         return (
           !normalizedQuery ||
@@ -297,7 +222,7 @@ export default function ReviewManagementDashboard() {
           )
         );
       }).sort((a, b) => order === 'oldest' ? a.date.localeCompare(b.date) : order === 'rating' ? (a.rating ?? 6) - (b.rating ?? 6) : b.date.localeCompare(a.date)),
-    [data.reviews, query, rating, status, sourceFilter, order, assigneeFilter],
+    [data.reviews, query, rating, status, sourceFilter, order],
   );
 
   const stats = useMemo(() => {
@@ -359,17 +284,6 @@ export default function ReviewManagementDashboard() {
     setSelected(null);
   }, 'Відгук видалено');
 
-  const importFile = async (file: File) => {
-    try {
-      const reviews = parseCsv(await file.text());
-      if (!reviews.length) throw new Error('Файл не містить відгуків');
-      await mutate(async () => { await bulkUpsertSharedReviews(reviews); }, 'Імпорт завершено');
-    } catch (error) {
-      setSyncState('error');
-      setSyncMessage(error instanceof Error ? error.message : 'Помилка імпорту');
-    }
-  };
-
   const addReview = (review: Review) => mutate(async () => {
     const created = await createSharedReview(review);
     setData(previous => ({ ...previous, reviews: [created, ...previous.reviews.filter(r => r.id !== created.id)] }));
@@ -417,31 +331,12 @@ export default function ReviewManagementDashboard() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <input
-              ref={input}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={event => {
-                const file = event.target.files?.[0];
-                if (file) void importFile(file);
-                event.currentTarget.value = '';
-              }}
-            />
             <button
               type="button"
               onClick={() => void refresh()}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[.055] px-4 py-3 text-sm font-black text-white/75 transition hover:-translate-y-0.5 hover:bg-white/[.09]"
             >
               <RefreshCw size={16} /> Оновити
-            </button>
-            <button
-              type="button"
-              disabled={!hasSharedReviewsApi || syncState === 'saving'}
-              onClick={() => input.current?.click()}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[.055] px-4 py-3 text-sm font-black text-white/75 transition hover:-translate-y-0.5 hover:bg-white/[.09]"
-            >
-              <ImageIcon size={16} /> Імпорт CSV
             </button>
             <button
               type="button"
@@ -472,7 +367,7 @@ export default function ReviewManagementDashboard() {
             <input
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Пошук за автором, текстом, відповіддю або відповідальним"
+              placeholder="Пошук за автором, текстом або відповіддю"
               className="w-full rounded-2xl border border-white/10 bg-white/[.045] py-3.5 pl-10 pr-3 text-sm outline-none transition placeholder:text-white/28 focus:border-[#cfeeed]/30 focus:bg-white/[.065]"
             />
           </label>
@@ -513,9 +408,8 @@ export default function ReviewManagementDashboard() {
         <CustomDropdown placeholder="Джерело" value={sourceFilter} onChange={value => setSourceFilter(String(value))} options={[{ id: 'all', label: 'Усі джерела' }, ...Array.from(new Set(data.reviews.map(r => r.source))).map(id => ({ id, label: id }))]} />
         <CustomDropdown placeholder="Сортування" value={order} onChange={value => setOrder(String(value))} options={[{ id: 'newest', label: 'Спочатку нові' }, { id: 'oldest', label: 'Спочатку старі' }, { id: 'rating', label: 'Спочатку критичні' }]} />
       </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <input aria-label="Фільтр за відповідальним" placeholder="Відповідальний" value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)} className="rounded-xl bg-white/10 p-3" />
-        <button type="button" onClick={() => { setQuery(''); setStatus('all'); setRating('all'); setSourceFilter('all'); setAssigneeFilter(''); setOrder('newest'); }} className="rounded-xl border border-white/20 p-3">Скинути фільтри</button>
+      <div className="mt-2 flex justify-end">
+        <button type="button" onClick={() => { setQuery(''); setStatus('all'); setRating('all'); setSourceFilter('all'); setOrder('newest'); }} className="rounded-xl border border-white/20 px-4 py-3 text-sm font-bold text-white/60 transition hover:bg-white/[.06] hover:text-white">Скинути фільтри</button>
       </div>
       <section className="mt-4 grid gap-4">
         {filtered.length === 0 ? (
@@ -758,36 +652,68 @@ function ReviewModal({ review, onClose, onSave, onDelete, onOpenImage }: { onDel
           </aside>
 
           <section className="p-5 lg:overflow-y-auto md:p-7">
-            {error && <p role="alert" className="mb-4 text-rose-200">{error}</p>}
-            <fieldset disabled={saving} className="mb-5 grid gap-3 sm:grid-cols-2">
-              {([['source', 'Джерело'], ['date', 'Дата'], ['author', 'Автор'], ['url', 'URL']] as const).map(([key, label]) => <label key={key}>{label}<input type={key === 'date' ? 'date' : 'text'} value={fields[key]} onChange={e => setFields({ ...fields, [key]: e.target.value })} className="mt-1 w-full rounded-xl bg-white/10 p-3" /></label>)}
-              <label>Оцінка<select aria-label="Оцінка" className="review-select w-full rounded-xl bg-[#4c061c] p-3" value={fields.rating ?? ''} onChange={e => setFields({ ...fields, rating: e.target.value ? Number(e.target.value) : null })}><option value="">Без оцінки</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
-              <label className="sm:col-span-2">Текст відгуку<textarea aria-label="Текст відгуку" className="mt-1 w-full rounded-xl bg-white/10 p-3" rows={4} value={fields.content} onChange={e => setFields({ ...fields, content: e.target.value })} /></label>
+            {error && <p role="alert" className="mb-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">{error}</p>}
+
+            <fieldset disabled={saving} className="rounded-[24px] border border-white/[.08] bg-white/[.025] p-4 md:p-5">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#cfeeed]/10 text-[#d8f4f2]"><MessageSquareText size={17} /></div>
+                <div>
+                  <div className="text-sm font-black text-white/90">Дані відгуку</div>
+                  <div className="mt-0.5 text-xs leading-5 text-white/35">Джерело, автор і текст, які бачить менеджер у списку</div>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {([['source', 'Джерело'], ['date', 'Дата'], ['author', 'Автор'], ['url', 'Посилання на оригінал']] as const).map(([key, label]) => (
+                  <label key={key} className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                    {label}
+                    <input aria-label={label} type={key === 'date' ? 'date' : 'text'} value={fields[key]} onChange={e => setFields({ ...fields, [key]: e.target.value })} className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.045] px-4 py-3.5 text-sm font-medium normal-case tracking-normal text-white outline-none" />
+                  </label>
+                ))}
+                <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                  Оцінка
+                  <select aria-label="Оцінка" className="review-select mt-2 w-full rounded-2xl border border-white/10 bg-[#4c061c] px-4 py-3.5 text-sm font-semibold normal-case tracking-normal" value={fields.rating ?? ''} onChange={e => setFields({ ...fields, rating: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">Без оцінки</option>
+                    {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} {n === 1 ? 'зірка' : n < 5 ? 'зірки' : 'зірок'}</option>)}
+                  </select>
+                </label>
+                <label className="sm:col-span-2 text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                  Текст відгуку
+                  <textarea aria-label="Текст відгуку" className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[.045] p-4 text-sm font-medium normal-case leading-6 tracking-normal text-white outline-none" rows={4} value={fields.content} onChange={e => setFields({ ...fields, content: e.target.value })} />
+                </label>
+              </div>
             </fieldset>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/40">
-                Статус опрацювання
-                <div className="mt-2">
-                  <CustomDropdown
-                    value={status}
-                    onChange={(val) => setStatus(val as Status)}
-                    options={[
-                      { id: "new", label: "Новий" },
-                      { id: "needs_reply", label: "Без відповіді" },
-                      { id: "draft", label: "Чернетка" },
-                      { id: "sent", label: "Відповідь надіслана" },
-                      { id: "closed", label: "Закрито" },
-                    ]}
-                  />
-                </div>
-              </label>
-              <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/40">
-                Відповідальний
-                <div className="relative mt-2">
-                  <UserRound size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
-                  <input disabled={saving} value={assignee} onChange={event => setAssignee(event.target.value)} placeholder="Ім’я працівника" className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30" />
-                </div>
-              </label>
+
+            <div className="mt-4 rounded-[24px] border border-white/[.08] bg-white/[.025] p-4 md:p-5">
+              <div className="mb-4">
+                <div className="text-sm font-black text-white/90">Організація роботи</div>
+                <div className="mt-0.5 text-xs leading-5 text-white/35">Статус показує поточний етап опрацювання</div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                  Статус опрацювання
+                  <div className="mt-2">
+                    <CustomDropdown
+                      placeholder="Статус опрацювання"
+                      value={status}
+                      onChange={(val) => setStatus(val as Status)}
+                      options={[
+                        { id: "new", label: "Новий" },
+                        { id: "needs_reply", label: "Без відповіді" },
+                        { id: "draft", label: "Чернетка" },
+                        { id: "sent", label: "Відповідь надіслана" },
+                        { id: "closed", label: "Закрито" },
+                      ]}
+                    />
+                  </div>
+                </label>
+                <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                  Відповідальний <span className="normal-case tracking-normal text-white/25">· необов’язково</span>
+                  <div className="relative mt-2">
+                    <UserRound size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                    <input aria-label="Відповідальний" disabled={saving} value={assignee} onChange={event => setAssignee(event.target.value)} placeholder="Якщо працює кілька менеджерів" className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25" />
+                  </div>
+                </label>
+              </div>
             </div>
 
             <div className="mt-5 rounded-[22px] border border-[#cfeeed]/12 bg-[#cfeeed]/[.035] p-4 md:p-5">
@@ -895,109 +821,90 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
 
   return (
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Новий відгук" className="fixed inset-0 z-[200] flex items-center justify-center bg-[#160109]/82 p-3 sm:p-4 backdrop-blur-md">
-      <div className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-white/12 bg-[#350313] text-white shadow-[0_35px_100px_rgba(0,0,0,.5)]">
-        {/* Fixed Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-white/[.08] bg-white/[.025] px-6 py-4">
-          <div>
-            <div className="text-[10px] font-black uppercase tracking-[.16em] text-[#cfeeed]/45">Manual review</div>
-            <h2 className="mt-0.5 text-xl font-black">Додати відгук</h2>
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[30px] border border-white/12 bg-[#350313] text-white shadow-[0_35px_100px_rgba(0,0,0,.5)]">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/[.08] bg-[radial-gradient(circle_at_top_right,rgba(207,238,237,.10),transparent_48%)] px-5 py-4 sm:px-7 sm:py-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#cfeeed]/12 bg-[#cfeeed]/10 text-[#d8f4f2]"><Plus size={20} /></div>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[.16em] text-[#cfeeed]/50">Новий запис</div>
+              <h2 className="mt-0.5 text-xl font-black tracking-tight sm:text-2xl">Додати відгук</h2>
+              <p className="mt-1 hidden text-xs text-white/35 sm:block">Збережіть відгук із будь-якого джерела в єдиній базі</p>
+            </div>
           </div>
-          <button type="button" disabled={saving} onClick={onClose} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/[.06] hover:text-white">
+          <button type="button" aria-label="Закрити вікно" disabled={saving} onClick={onClose} className="rounded-full border border-white/10 bg-white/[.025] p-2.5 text-white/55 transition hover:bg-white/[.07] hover:text-white">
             <X size={19} />
           </button>
         </div>
 
-        {error && <p role="alert" className="px-6 text-rose-200">{error}</p>}
-        {/* Scrollable Form Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-3.5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Джерело</label>
-              <CustomDropdown
-                value={source}
-                onChange={(val) => setSource(val)}
-                options={sourceOptions}
-              />
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+          {error && <p role="alert" className="rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">{error}</p>}
+
+          <section className="rounded-[24px] border border-white/[.08] bg-white/[.025] p-4 sm:p-5">
+            <div className="mb-4">
+              <div className="text-sm font-black text-white/90">Основна інформація</div>
+              <div className="mt-0.5 text-xs leading-5 text-white/35">Звідки надійшов відгук і хто його залишив</div>
             </div>
-
-            <div>
-              <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Дата відгуку</label>
-              <input
-                type="date"
-                value={reviewDate}
-                onChange={event => setReviewDate(event.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3.5 text-sm font-semibold text-white outline-none transition hover:border-white/20 [color-scheme:dark]"
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                Джерело
+                <div className="mt-2"><CustomDropdown placeholder="Джерело" value={source} onChange={(val) => setSource(val)} options={sourceOptions} /></div>
+              </label>
+              <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                Дата відгуку
+                <input aria-label="Дата відгуку" type="date" value={reviewDate} onChange={event => setReviewDate(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3.5 text-sm font-semibold normal-case tracking-normal text-white outline-none [color-scheme:dark]" />
+              </label>
+              <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                Автор або нік
+                <div className="relative mt-2">
+                  <UserRound size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                  <input aria-label="Автор або нік" value={author} onChange={event => setAuthor(event.target.value)} placeholder="Наприклад: @alex_kyiv" className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/25" />
+                </div>
+              </label>
+              <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                Оцінка
+                <div className="mt-2"><CustomDropdown placeholder="Оцінка" value={rating} onChange={(val) => setRating(val)} options={ratingOptions} /></div>
+              </label>
+              <label className="sm:col-span-2 text-[11px] font-black uppercase tracking-[.12em] text-white/42">
+                Посилання <span className="normal-case tracking-normal text-white/25">· необов’язково</span>
+                <div className="relative mt-2">
+                  <Link2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                  <input aria-label="Посилання" value={url} onChange={event => setUrl(event.target.value)} placeholder="https://instagram.com/p/..." className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/25" />
+                </div>
+              </label>
             </div>
-          </div>
+          </section>
 
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Автор або нік</label>
-            <input
-              value={author}
-              onChange={event => setAuthor(event.target.value)}
-              placeholder="наприклад: @alex_kyiv"
-              className="w-full rounded-2xl border border-white/10 bg-white/[.04] p-3.5 text-sm font-medium text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Посилання (необов’язково)</label>
-            <div className="relative">
-              <Link2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
-              <input
-                value={url}
-                onChange={event => setUrl(event.target.value)}
-                placeholder="https://instagram.com/p/..."
-                className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm font-medium text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30"
-              />
+          <section className="rounded-[24px] border border-white/[.08] bg-white/[.025] p-4 sm:p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#cfeeed]/10 text-[#d8f4f2]"><MessageSquareText size={17} /></div>
+              <div>
+                <div className="text-sm font-black text-white/90">Текст відгуку</div>
+                <div className="mt-0.5 text-xs leading-5 text-white/35">Вставте повідомлення гостя без змін</div>
+              </div>
             </div>
-          </div>
+            <textarea aria-label="Текст відгуку" value={content} onChange={event => setContent(event.target.value)} rows={4} placeholder="Введіть текст відгуку..." className="w-full resize-y rounded-[18px] border border-white/10 bg-white/[.045] p-4 text-sm leading-6 text-white outline-none placeholder:text-white/25" />
+          </section>
 
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Оцінка</label>
-            <CustomDropdown
-              value={rating}
-              onChange={(val) => setRating(val)}
-              options={ratingOptions}
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-white/40 mb-1.5">Текст відгуку</label>
-            <textarea
-              value={content}
-              onChange={event => setContent(event.target.value)}
-              rows={3}
-              placeholder="Введіть текст відгуку..."
-              className="w-full rounded-[18px] border border-white/10 bg-white/[.04] p-4 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30 resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-wider text-[#cfeeed]/60 mb-1.5">Вирішення ситуації / Внутрішній коментар</label>
-            <textarea
-              value={internalNote}
-              onChange={event => setInternalNote(event.target.value)}
-              rows={2}
-              placeholder="Наприклад: Надано компенсацію 200грн, кухар попереджений..."
-              className="w-full rounded-[18px] border border-white/10 bg-white/[.04] p-3.5 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30 resize-none"
-            />
-          </div>
+          <section className="rounded-[24px] border border-[#cfeeed]/10 bg-[#cfeeed]/[.025] p-4 sm:p-5">
+            <label className="block text-[11px] font-black uppercase tracking-[.12em] text-[#cfeeed]/60">
+              Внутрішній коментар <span className="normal-case tracking-normal text-white/25">· необов’язково</span>
+              <textarea aria-label="Внутрішній коментар" value={internalNote} onChange={event => setInternalNote(event.target.value)} rows={3} placeholder="Наприклад: гостю надали компенсацію, ситуацію передали кухні…" className="mt-2 w-full resize-y rounded-[18px] border border-white/10 bg-white/[.04] p-4 text-sm font-medium normal-case leading-6 tracking-normal text-white outline-none placeholder:text-white/25" />
+            </label>
+            <p className="mt-2 text-xs leading-5 text-white/30">Цей текст бачить лише команда MARMOO.</p>
+          </section>
         </div>
 
-        {/* Fixed Always-Visible Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/[.08] bg-[#350313] px-6 py-4">
-          <button type="button" disabled={saving} onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 font-black text-white/55 hover:bg-white/[.05] hover:text-white">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/[.08] bg-[#300410]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
+          <button type="button" disabled={saving} onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black text-white/55 transition hover:bg-white/[.05] hover:text-white">
             Скасувати
           </button>
           <button
             type="button"
             disabled={!content.trim() || saving}
             onClick={() => void add()}
-            className="rounded-2xl bg-[#cfeeed] px-5 py-3 font-black text-[#531027] disabled:opacity-40 hover:bg-[#e0f7f5] transition shadow-lg"
+            className="inline-flex min-w-[132px] items-center justify-center gap-2 rounded-2xl bg-[#cfeeed] px-5 py-3 text-sm font-black text-[#531027] shadow-[0_12px_32px_rgba(207,238,237,.12)] transition hover:bg-[#e0f7f5] disabled:opacity-40"
           >
-            {saving ? "Додаємо…" : "Додати"}
+            {saving ? <><RefreshCw size={15} className="animate-spin" /> Додаємо…</> : <><Plus size={15} /> Додати</>}
           </button>
         </div>
       </div>

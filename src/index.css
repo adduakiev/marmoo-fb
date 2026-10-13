@@ -234,20 +234,35 @@ div.fixed.inset-0.z-\[200\] div.max-w-6xl a {
 }
 
 /* Add-review modal controls get the same treatment. */
-div.fixed.inset-0.z-\[200\] div.max-w-xl input,
-div.fixed.inset-0.z-\[200\] div.max-w-xl select,
-div.fixed.inset-0.z-\[200\] div.max-w-xl textarea {
+div.fixed.inset-0.z-\[200\] div.max-w-2xl input,
+div.fixed.inset-0.z-\[200\] div.max-w-2xl select,
+div.fixed.inset-0.z-\[200\] div.max-w-2xl textarea {
   color: #fffaf7 !important;
   background: rgba(255, 255, 255, .07) !important;
   border-color: rgba(255, 255, 255, .12) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
 }
 
-div.fixed.inset-0.z-\[200\] div.max-w-xl input:focus,
-div.fixed.inset-0.z-\[200\] div.max-w-xl select:focus,
-div.fixed.inset-0.z-\[200\] div.max-w-xl textarea:focus {
+div.fixed.inset-0.z-\[200\] div.max-w-2xl input:hover,
+div.fixed.inset-0.z-\[200\] div.max-w-2xl select:hover,
+div.fixed.inset-0.z-\[200\] div.max-w-2xl textarea:hover {
+  background: rgba(255, 255, 255, .085) !important;
+  border-color: rgba(207, 243, 242, .25) !important;
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-2xl input:focus,
+div.fixed.inset-0.z-\[200\] div.max-w-2xl select:focus,
+div.fixed.inset-0.z-\[200\] div.max-w-2xl textarea:focus {
   outline: none !important;
   border-color: rgba(207, 243, 242, .58) !important;
-  box-shadow: 0 0 0 4px rgba(207, 243, 242, .08);
+  background: rgba(255, 255, 255, .10) !important;
+  box-shadow: 0 0 0 4px rgba(207, 243, 242, .08), 0 12px 30px rgba(15, 0, 7, .14);
+}
+
+div.fixed.inset-0.z-\[200\] div.max-w-2xl input::placeholder,
+div.fixed.inset-0.z-\[200\] div.max-w-2xl textarea::placeholder {
+  color: rgba(255, 248, 244, .34) !important;
 }
 
 @media (max-width: 1023px) {
@@ -279,6 +294,12 @@ div.fixed.inset-0.z-\[200\] div.max-w-xl textarea:focus {
 
   div.fixed.inset-0.z-\[200\] div.max-w-6xl textarea[rows="7"] {
     min-height: 165px;
+  }
+
+  div.fixed.inset-0.z-\[200\] div.max-w-2xl input,
+  div.fixed.inset-0.z-\[200\] div.max-w-2xl select,
+  div.fixed.inset-0.z-\[200\] div.max-w-2xl textarea {
+    font-size: 16px !important;
   }
 }
 

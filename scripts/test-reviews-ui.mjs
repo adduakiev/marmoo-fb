@@ -31,6 +31,8 @@ for (const width of [1440,390]) {
   await page.goto(base+'?view=dashboard_reviews');
   await page.getByText('Initial review',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no page horizontal overflow');
+  assert.equal(await page.getByRole('button',{name:'Імпорт CSV',exact:true}).count(),0,'CSV import is hidden from the manager workspace');
+  assert.equal(await page.getByLabel('Фільтр за відповідальним',{exact:true}).count(),0,'assignee text filter is removed');
   await page.getByRole('button',{name:'Опрацювати',exact:true}).click();
   const modal=page.getByRole('dialog');
   await modal.getByLabel('Автор',{exact:true}).fill('Edited author');
@@ -61,6 +63,9 @@ for (const width of [1440,390]) {
   await page.waitForTimeout(100);
   await page.getByRole('button',{name:'Повернути в роботу',exact:true}).waitFor();
   await page.getByRole('button',{name:'Додати відгук',exact:true}).click();
+  await modal.getByText('Основна інформація',{exact:true}).waitFor();
+  await modal.getByText('Цей текст бачить лише команда MARMOO.',{exact:true}).waitFor();
+  assert.equal(await modal.getByLabel('Джерело',{exact:true}).evaluate(el=>getComputedStyle(el).colorScheme),'dark');
   await modal.getByPlaceholder('Введіть текст відгуку...').fill('Created review');
   await modal.getByRole('button',{name:'Додати',exact:true}).click();
   await page.getByText('Created review',{exact:true}).waitFor();
