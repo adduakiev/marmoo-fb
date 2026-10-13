@@ -204,6 +204,7 @@ export default function ReviewManagementDashboard() {
   const input = useRef<HTMLInputElement>(null);
   const revision = useRef(0);
   const mutating = useRef(false);
+  const reading = useRef(false);
   const [sourceFilter, setSourceFilter] = useState('all');
   const [order, setOrder] = useState('newest');
   const [assigneeFilter, setAssigneeFilter] = useState('');
@@ -216,7 +217,7 @@ export default function ReviewManagementDashboard() {
 
   const refresh = useCallback(
     async (silent = false) => {
-      if (mutating.current) return;
+      if (mutating.current || reading.current) return;
       const request = ++revision.current;
       if (!hasSharedReviewsApi) {
         if (!silent) {
@@ -231,6 +232,7 @@ export default function ReviewManagementDashboard() {
         setSyncMessage('Оновлюємо спільну базу…');
       }
 
+      reading.current = true;
       try {
         const reviews = await listSharedReviews();
         if (request !== revision.current) return;
@@ -242,6 +244,8 @@ export default function ReviewManagementDashboard() {
         if (request !== revision.current) return;
         setSyncState('error');
         setSyncMessage(error instanceof Error ? error.message : 'Помилка синхронізації');
+      } finally {
+        reading.current = false;
       }
     },
     [updateDataReviews],
