@@ -51,7 +51,7 @@ function CustomDropdown<T extends string | number | null>({
         const option = options.find(o => (o.id === null ? '__none' : String(o.id)) === event.target.value);
         if (option) onChange(option.id);
       }}
-      className={`w-full rounded-2xl border border-white/15 bg-[#4c061c] px-4 py-3.5 text-sm font-semibold text-white focus:outline focus:outline-2 focus:outline-[#cfeeed] ${className}`}
+      className={`review-select w-full rounded-2xl border border-white/15 bg-[#4c061c] px-4 py-3.5 text-sm font-semibold text-white focus:outline focus:outline-2 focus:outline-[#cfeeed] ${className}`}
     >
       {options.map(option => <option key={String(option.id)} value={option.id === null ? '__none' : String(option.id)}>{option.label}{option.badge ? ' (' + option.badge + ')' : ''}</option>)}
     </select>
@@ -761,7 +761,7 @@ function ReviewModal({ review, onClose, onSave, onDelete, onOpenImage }: { onDel
             {error && <p role="alert" className="mb-4 text-rose-200">{error}</p>}
             <fieldset disabled={saving} className="mb-5 grid gap-3 sm:grid-cols-2">
               {([['source', 'Джерело'], ['date', 'Дата'], ['author', 'Автор'], ['url', 'URL']] as const).map(([key, label]) => <label key={key}>{label}<input type={key === 'date' ? 'date' : 'text'} value={fields[key]} onChange={e => setFields({ ...fields, [key]: e.target.value })} className="mt-1 w-full rounded-xl bg-white/10 p-3" /></label>)}
-              <label>Оцінка<select aria-label="Оцінка" className="w-full rounded-xl bg-[#4c061c] p-3" value={fields.rating ?? ''} onChange={e => setFields({ ...fields, rating: e.target.value ? Number(e.target.value) : null })}><option value="">Без оцінки</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+              <label>Оцінка<select aria-label="Оцінка" className="review-select w-full rounded-xl bg-[#4c061c] p-3" value={fields.rating ?? ''} onChange={e => setFields({ ...fields, rating: e.target.value ? Number(e.target.value) : null })}><option value="">Без оцінки</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
               <label className="sm:col-span-2">Текст відгуку<textarea aria-label="Текст відгуку" className="mt-1 w-full rounded-xl bg-white/10 p-3" rows={4} value={fields.content} onChange={e => setFields({ ...fields, content: e.target.value })} /></label>
             </fieldset>
             <div className="grid gap-4 md:grid-cols-2">
