@@ -26,10 +26,30 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: TypeScript check
         run: npm run lint
 
       - name: Production build
         run: npm run build
+
+      - name: Reviews backend contract tests
+        run: node scripts/test-reviews-api.mjs
+
+      - name: Build reviews test fixture
+        run: npm run build
+        env:
+          VITE_REVIEWS_API_URL: https://reviews.test/exec
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Reviews desktop and mobile tests
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/reviews-preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/marmoo-fb/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-reviews-ui.mjs

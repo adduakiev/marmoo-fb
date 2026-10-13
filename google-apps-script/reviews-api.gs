@@ -11,7 +11,7 @@ const REVIEW_HEADERS = [
 function doGet(e) {
   try {
     const action = String((e && e.parameter && e.parameter.action) || 'list');
-    if (action === 'health') return json_({ ok: true, service: 'marmoo-reviews-api' });
+    if (action === 'health') { getSheet_(); return json_({ ok: true, service: 'marmoo-reviews-api', version: 2, capabilities: ['delete', 'clearReply'] }); }
     if (action === 'list') return json_(listReviews_());
     return json_({ ok: false, error: 'Unknown action' });
   } catch (error) {
@@ -24,6 +24,7 @@ function doPost(e) {
     const payload = parseBody_(e);
     const action = String(payload.action || '');
     if (action === 'create') return json_(createReview_(payload.review || {}));
+    if (action === 'delete') return json_(deleteReview_(payload.id));
     if (action === 'update') return json_(updateReview_(payload.id, payload.changes || {}));
     if (action === 'bulkUpsert') return json_(bulkUpsert_(payload.reviews || []));
     return json_({ ok: false, error: 'Unknown action' });
@@ -56,8 +57,9 @@ function createReview_(review) {
       updatedAt: now
     });
     const existing = findRowById_(sheet, id);
-    if (existing > 0) return { ok: false, error: 'Review already exists', id };
+    if (existing > 0) return { ok: true, review: rowToReview_(REVIEW_HEADERS, sheet.getRange(existing, 1, 1, REVIEW_HEADERS.length).getDisplayValues()[0]) };
     sheet.appendRow(reviewToRow_(normalized));
+    SpreadsheetApp.flush();
     return { ok: true, review: normalized };
   } finally {
     lock.releaseLock();
@@ -74,12 +76,27 @@ function updateReview_(id, changes) {
     if (rowIndex < 2) return { ok: false, error: 'Review not found', id };
     const currentRow = sheet.getRange(rowIndex, 1, 1, REVIEW_HEADERS.length).getDisplayValues()[0];
     const current = rowToReview_(REVIEW_HEADERS, currentRow);
+    if (Object.prototype.hasOwnProperty.call(changes, 'updatedAt') && changes.updatedAt !== current.updatedAt) throw new Error('Відгук уже змінено іншим користувачем. Оновіть список.');
     const next = normalizeReview_({ ...current, ...changes, id: current.id, updatedAt: new Date().toISOString() });
     sheet.getRange(rowIndex, 1, 1, REVIEW_HEADERS.length).setValues([reviewToRow_(next)]);
+    SpreadsheetApp.flush();
     return { ok: true, review: next };
   } finally {
     lock.releaseLock();
   }
+}
+
+function deleteReview_(id) {
+  if (!id) throw new Error('Missing review id');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getSheet_();
+    const row = findRowById_(sheet, String(id));
+    if (row >= 2) sheet.deleteRow(row);
+    SpreadsheetApp.flush();
+    return { ok: true, deleted: true, id: String(id) };
+  } finally { lock.releaseLock(); }
 }
 
 function bulkUpsert_(reviews) {
@@ -92,26 +109,28 @@ function bulkUpsert_(reviews) {
     const idIndex = REVIEW_HEADERS.indexOf('ID');
     const existing = new Map();
     values.slice(1).forEach((row, index) => {
-      const id = String(row[idIndex] || '').trim();
+      const id = String(row[idIndex] || row[1] || '').trim();
       if (id) existing.set(id, index + 2);
     });
     let created = 0;
-    let updated = 0;
+    const updated = 0;
+    let skipped = 0;
     reviews.forEach(item => {
       const now = new Date().toISOString();
       const id = String(item.id || item.url || ('manual-' + Utilities.getUuid()));
       const normalized = normalizeReview_({ ...item, id, updatedAt: now, createdAt: item.createdAt || now });
       const row = reviewToRow_(normalized);
       if (existing.has(id)) {
-        sheet.getRange(existing.get(id), 1, 1, REVIEW_HEADERS.length).setValues([row]);
-        updated += 1;
+        // Re-import must never overwrite manager edits.
+        skipped += 1;
       } else {
         sheet.appendRow(row);
         existing.set(id, sheet.getLastRow());
         created += 1;
       }
     });
-    return { ok: true, created, updated };
+    SpreadsheetApp.flush();
+    return { ok: true, created, updated, skipped };
   } finally {
     lock.releaseLock();
   }
@@ -130,9 +149,9 @@ function findRowById_(sheet, id) {
   const idColumn = REVIEW_HEADERS.indexOf('ID') + 1;
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return -1;
-  const values = sheet.getRange(2, idColumn, lastRow - 1, 1).getDisplayValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, REVIEW_HEADERS.length).getDisplayValues();
   for (let i = 0; i < values.length; i += 1) {
-    if (String(values[i][0]).trim() === id) return i + 2;
+    if (String(values[i][idColumn - 1] || values[i][1]).trim() === id) return i + 2;
   }
   return -1;
 }
@@ -171,10 +190,11 @@ function reviewToRow_(review) {
     r.rating === null ? '' : r.rating, r.content, r.images.join(', '), r.video || '',
     r.id, r.source, r.status, r.reply, r.assignee, r.internalNote,
     r.respondedAt, r.createdAt, r.updatedAt, r.tags.join(', ')
-  ];
+  ].map(value => typeof value === 'string' && /^[=+@]/.test(value) ? "'" + value : value);
 }
 
 function normalizeReview_(review) {
+  if (review.rating !== null && review.rating !== '' && review.rating !== undefined && (!Number.isInteger(Number(review.rating)) || Number(review.rating) < 1 || Number(review.rating) > 5)) throw new Error('Rating must be 1–5');
   const allowedStatuses = ['new', 'needs_reply', 'draft', 'sent', 'closed'];
   return {
     id: String(review.id || review.url || ''),
