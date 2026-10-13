@@ -1,5 +1,7 @@
 # Reviews CRM rollout
 
+> Historical rollout record. For the current architecture, behavior and maintenance rules, read [`REVIEWS_CRM.md`](REVIEWS_CRM.md).
+
 ## Confirmed findings
 - Delete previously set `closed`; no backend delete action existed.
 - Optimistic updates, overlapping polling/focus requests and captured arrays could overwrite each other. The refresh callback also changed when review count changed, restarting polling/bootstrap.

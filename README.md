@@ -6,6 +6,11 @@
 
 This contains everything you need to run your app locally.
 
+## Project documentation
+
+- [MARMOO Reviews CRM](REVIEWS_CRM.md) — current architecture, manager workflow, API contract, tests, deployment and maintenance rules.
+- [Reviews CRM rollout history](REVIEWS_CRM_ROLLOUT.md) — original investigation and production rollout notes.
+
 View your app in AI Studio: https://ai.studio/apps/ec2771ae-d8cc-46f9-bf6c-f45190fcbfdb
 
 ## Run Locally
