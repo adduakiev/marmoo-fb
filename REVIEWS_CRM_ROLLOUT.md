@@ -17,7 +17,7 @@ Backend adds locked physical deletion, URL fallback lookup, idempotent creation 
 
 ## Before merge / production deployment
 1. Back up the Reviews sheet using the owner's access.
-2. Review access control. The checked-in Apps Script has no authentication/authorization, and live list is anonymously readable. Do not expose destructive administration publicly: enforce authenticated manager access in a backend/proxy or restricted deployment compatible with the frontend. A secret in a Vite variable is not protection. This PR does not implement identity management.
+2. Access decision (2026-10-13): the owner explicitly confirmed keeping the module and API open without login, including public create/update/delete. Authentication is intentionally out of scope. Anyone with the endpoint can mutate reviews; do not add a client-side secret as pretend protection.
 3. Deploy `google-apps-script/reviews-api.gs` as a new version of the existing Apps Script deployment. Preserve its URL and verify sheet schema, execution account and access permissions. A GitHub merge does NOT update Apps Script.
 4. Health must report version 2 and delete capability; production publishing now fails until this contract is available.
 5. Use a disposable test record to confirm browser create → read → edit all fields → clear reply → reload → delete → reload against the deployed backend, including failure permissions. Local tests use a Sheet mock and mocked browser HTTP; they cannot prove deployed Apps Script permissions or CORS.
@@ -30,6 +30,8 @@ Backend adds locked physical deletion, URL fallback lookup, idempotent creation 
 - Existing `scripts/smoke-preview.mjs` checks other BI routes.
 
 ## Remaining limitations
-No live backend deployment credentials are available in this workspace. Production CRUD and deployment are not claimed as verified. There is no role management/audit trail yet. Deletion is permanent. Browser timeout may occur after a committed write; refresh before retrying. Sheet display-value handling and original CSV parser remain legacy behavior. The build retains the existing large-bundle warning.
+Apps Script version 2 was deployed through the owner’s browser on 2026-10-13, retaining the existing URL and access settings. Live API CRUD passed on a temporary record, which was deleted after verification. All 68 pre-existing review IDs remained present. Frontend deployment is tracked by the PR and GitHub Actions. There is no role management/audit trail yet. Deletion is permanent. Browser timeout may occur after a committed write; refresh before retrying. Sheet display-value handling and original CSV parser remain legacy behavior. The build retains the existing large-bundle warning.
 
 Local results: TypeScript and production build passed. Reviews backend tests and browser CRUD tests passed at 1440px and 390px. Other BI routes were tested with the currently published data snapshots (these snapshots are not committed).
+
+Backup: the pre-deployment API JSON (68 reviews) and Apps Script source were saved outside the repository in the task workspace backups directory. The browser showed deployment version 2 successfully published.
