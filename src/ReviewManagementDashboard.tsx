@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   bulkUpsertSharedReviews,
+  deleteSharedReview,
   createSharedReview,
   hasSharedReviewsApi,
   listSharedReviews,
@@ -42,58 +43,18 @@ function CustomDropdown<T extends string | number | null>({
   placeholder = "Обрати...",
   className = "",
 }: CustomDropdownProps<T>) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selected = options.find((o) => String(o.id) === String(value)) || options[0];
-
   return (
-    <div ref={ref} className={`relative w-full ${className}`}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#4c061c]/90 px-4 py-3.5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-[#5a0823] outline-none"
-      >
-        <span className="truncate">{selected?.label || placeholder}</span>
-        <ChevronRight size={16} className={`text-white/40 transition-transform duration-200 ${open ? "-rotate-90" : "rotate-90"}`} />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-full min-w-[180px] overflow-hidden rounded-2xl border border-white/15 bg-[#3a0414]/95 p-1.5 text-sm text-white shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-          {options.map((opt) => {
-            const active = String(opt.id) === String(value);
-            return (
-              <button
-                key={String(opt.id)}
-                type="button"
-                onClick={() => {
-                  onChange(opt.id);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition ${
-                  active ? "bg-[#cfeeed] text-[#531027] font-black" : "text-white/80 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <span>{opt.label}</span>
-                {opt.badge && (
-                  <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${active ? "bg-[#531027]/20 text-[#531027]" : "bg-white/10 text-white/60"}`}>
-                    {opt.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <select
+      aria-label={placeholder}
+      value={value === null ? '__none' : String(value)}
+      onChange={event => {
+        const option = options.find(o => (o.id === null ? '__none' : String(o.id)) === event.target.value);
+        if (option) onChange(option.id);
+      }}
+      className={`w-full rounded-2xl border border-white/15 bg-[#4c061c] px-4 py-3.5 text-sm font-semibold text-white focus:outline focus:outline-2 focus:outline-[#cfeeed] ${className}`}
+    >
+      {options.map(option => <option key={String(option.id)} value={option.id === null ? '__none' : String(option.id)}>{option.label}{option.badge ? ' (' + option.badge + ')' : ''}</option>)}
+    </select>
   );
 }
 
@@ -119,7 +80,7 @@ type SyncState = 'loading' | 'synced' | 'saving' | 'offline' | 'error';
 type LightboxState = { images: string[]; index: number } | null;
 
 const DATA_URL = `${import.meta.env.BASE_URL || '/'}google-reviews.json`;
-const CACHE_KEY = 'marmoo-review-management-cache-v2';
+
 
 const STATUS: Record<Status, string> = {
   new: 'Новий',
@@ -241,15 +202,22 @@ export default function ReviewManagementDashboard() {
   const [syncMessage, setSyncMessage] = useState('Підключення до спільної бази…');
   const [lastSyncedAt, setLastSyncedAt] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  const revision = useRef(0);
+  const mutating = useRef(false);
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [order, setOrder] = useState('newest');
+  const [assigneeFilter, setAssigneeFilter] = useState('');
 
   const updateDataReviews = useCallback((reviews: Review[]) => {
     const sorted = sortReviews(reviews);
     setData(previous => ({ ...previous, reviews: sorted }));
-    localStorage.setItem(CACHE_KEY, JSON.stringify(sorted));
+
   }, []);
 
   const refresh = useCallback(
     async (silent = false) => {
+      if (mutating.current) return;
+      const request = ++revision.current;
       if (!hasSharedReviewsApi) {
         if (!silent) {
           setSyncState('offline');
@@ -265,24 +233,18 @@ export default function ReviewManagementDashboard() {
 
       try {
         const reviews = await listSharedReviews();
+        if (request !== revision.current) return;
         updateDataReviews(reviews);
         setSyncState('synced');
         setSyncMessage('Спільна база синхронізована');
         setLastSyncedAt(new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }));
       } catch (error) {
-        const cached = localStorage.getItem(CACHE_KEY);
-        if (cached && data.reviews.length === 0) {
-          try {
-            updateDataReviews(JSON.parse(cached) as Review[]);
-          } catch {
-            // Ignore malformed cache.
-          }
-        }
+        if (request !== revision.current) return;
         setSyncState('error');
         setSyncMessage(error instanceof Error ? error.message : 'Помилка синхронізації');
       }
     },
-    [data.reviews.length, updateDataReviews],
+    [updateDataReviews],
   );
 
   useEffect(() => {
@@ -310,6 +272,7 @@ export default function ReviewManagementDashboard() {
 
     return () => {
       cancelled = true;
+      ++revision.current;
       window.clearInterval(interval);
       window.removeEventListener('focus', onFocus);
     };
@@ -318,17 +281,19 @@ export default function ReviewManagementDashboard() {
   const filtered = useMemo(
     () =>
       data.reviews.filter(review => {
+        if (sourceFilter !== 'all' && review.source !== sourceFilter) return false;
         if (status !== 'all' && review.status !== status) return false;
-        if (rating !== 'all' && review.rating !== Number(rating)) return false;
-        const normalizedQuery = query.toLowerCase();
+        if (rating !== 'all' && review.rating !== (rating === 'none' ? null : Number(rating))) return false;
+        if (assigneeFilter && !review.assignee.toLowerCase().includes(assigneeFilter.trim().toLowerCase())) return false;
+        const normalizedQuery = query.trim().toLowerCase();
         return (
           !normalizedQuery ||
-          [review.author, review.content, review.reply, review.source, review.assignee].some(value =>
+          [review.author, review.content, review.reply, review.source, review.assignee, review.internalNote, review.url].some(value =>
             String(value || '').toLowerCase().includes(normalizedQuery),
           )
         );
-      }),
-    [data.reviews, query, rating, status],
+      }).sort((a, b) => order === 'oldest' ? a.date.localeCompare(b.date) : order === 'rating' ? (a.rating ?? 6) - (b.rating ?? 6) : b.date.localeCompare(a.date)),
+    [data.reviews, query, rating, status, sourceFilter, order, assigneeFilter],
   );
 
   const stats = useMemo(() => {
@@ -352,63 +317,65 @@ export default function ReviewManagementDashboard() {
     };
   }, [data.reviews]);
 
-  const saveChanges = async (id: string, changes: Partial<Review>) => {
-    const previous = data.reviews;
-    const optimistic = previous.map(review => (review.id === id ? { ...review, ...changes } : review));
-    updateDataReviews(optimistic);
+  const mutate = async (action: () => Promise<void>, message: string) => {
+    if (mutating.current) throw new Error('Дочекайтеся завершення попередньої операції');
+    mutating.current = true;
+    ++revision.current;
     setSyncState('saving');
     setSyncMessage('Зберігаємо…');
-
+    let committed = false;
     try {
-      const saved = await updateSharedReview(id, changes);
-      updateDataReviews(optimistic.map(review => (review.id === id ? saved : review)));
-      setSelected(saved);
+      await action();
+      committed = true;
+      const reviews = await listSharedReviews();
+      updateDataReviews(reviews);
       setSyncState('synced');
-      setSyncMessage('Збережено у спільній базі');
-      setLastSyncedAt(new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }));
+      setSyncMessage(message);
+      setLastSyncedAt(new Date().toLocaleTimeString('uk-UA'));
     } catch (error) {
-      updateDataReviews(previous);
+      const detail = error instanceof Error ? error.message : 'Помилка сервера';
+      const message = committed ? 'Запис прийнято сервером, але список не оновлено. Натисніть Оновити. ' + detail : detail;
       setSyncState('error');
-      setSyncMessage(error instanceof Error ? error.message : 'Не вдалося зберегти');
-      throw error;
+      setSyncMessage(message);
+      throw new Error(message);
+    } finally {
+      mutating.current = false;
     }
   };
 
+  const saveChanges = (id: string, changes: Partial<Review>) => mutate(async () => {
+    const saved = await updateSharedReview(id, changes);
+    setData(previous => ({ ...previous, reviews: previous.reviews.map(r => r.id === id ? saved : r) }));
+    setSelected(current => current?.id === id ? saved : current);
+  }, 'Зміни збережено');
+
+  const deleteReview = (id: string) => mutate(async () => {
+    await deleteSharedReview(id);
+    setData(previous => ({ ...previous, reviews: previous.reviews.filter(r => r.id !== id) }));
+    setSelected(null);
+  }, 'Відгук видалено');
+
   const importFile = async (file: File) => {
-    const reviews = parseCsv(await file.text());
-    if (!reviews.length) return;
-    setSyncState('saving');
-    setSyncMessage(`Синхронізуємо ${reviews.length} відгуків…`);
     try {
-      const result = await bulkUpsertSharedReviews(reviews);
-      setSyncMessage(`Імпортовано: ${result.created}, оновлено: ${result.updated}`);
-      await refresh(true);
+      const reviews = parseCsv(await file.text());
+      if (!reviews.length) throw new Error('Файл не містить відгуків');
+      await mutate(async () => { await bulkUpsertSharedReviews(reviews); }, 'Імпорт завершено');
     } catch (error) {
       setSyncState('error');
       setSyncMessage(error instanceof Error ? error.message : 'Помилка імпорту');
     }
   };
 
-  const addReview = async (review: Review) => {
-    setSyncState('saving');
-    setSyncMessage('Додаємо відгук…');
-    try {
-      const created = await createSharedReview(review);
-      updateDataReviews([created, ...data.reviews.filter(item => item.id !== created.id)]);
-      setAddOpen(false);
-      setSyncState('synced');
-      setSyncMessage('Відгук додано у спільну базу');
-      setLastSyncedAt(new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }));
-    } catch (error) {
-      setSyncState('error');
-      setSyncMessage(error instanceof Error ? error.message : 'Не вдалося додати відгук');
-    }
-  };
+  const addReview = (review: Review) => mutate(async () => {
+    const created = await createSharedReview(review);
+    setData(previous => ({ ...previous, reviews: [created, ...previous.reviews.filter(r => r.id !== created.id)] }));
+    setAddOpen(false);
+  }, 'Відгук додано');
 
   const cards: Array<[string, string | number, string]> = [
     ['Усього', stats.total, 'всі джерела'],
     ['Середня оцінка', stats.average ? stats.average.toFixed(2) : '—', 'за вибіркою'],
-    ['Google-рейтинг', data.business.googleRating, 'поточний профіль'],
+
     ['Без відповіді', stats.unanswered, 'потребують дії'],
     ['Критичні', stats.critical, '1–2 зірки'],
     ['Опрацьовано', `${stats.answeredRate.toFixed(0)}%`, `${stats.answered} відгуків`],
@@ -466,6 +433,7 @@ export default function ReviewManagementDashboard() {
             </button>
             <button
               type="button"
+              disabled={!hasSharedReviewsApi || syncState === 'saving'}
               onClick={() => input.current?.click()}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[.055] px-4 py-3 text-sm font-black text-white/75 transition hover:-translate-y-0.5 hover:bg-white/[.09]"
             >
@@ -473,6 +441,7 @@ export default function ReviewManagementDashboard() {
             </button>
             <button
               type="button"
+              disabled={!hasSharedReviewsApi || syncState === 'saving' || syncState === 'loading'}
               onClick={() => setAddOpen(true)}
               className="inline-flex items-center gap-2 rounded-2xl bg-[#cfeeed] px-5 py-3 text-sm font-black text-[#531027] shadow-[0_12px_35px_rgba(207,238,237,.12)] transition hover:-translate-y-0.5 hover:bg-[#e0f7f5]"
             >
@@ -482,7 +451,7 @@ export default function ReviewManagementDashboard() {
         </div>
       </section>
 
-      <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
         {cards.map(([label, value, hint]) => (
           <div key={label} className="group rounded-[22px] border border-white/[.075] bg-white/[.035] p-4 transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[.055]">
             <div className="text-[10px] font-black uppercase tracking-[.16em] text-white/38">{label}</div>
@@ -505,11 +474,13 @@ export default function ReviewManagementDashboard() {
           </label>
 
           <CustomDropdown
+            placeholder="Статус"
             value={status}
             onChange={(val) => setStatus(val as 'all' | Status)}
             options={[
               { id: "all", label: "Усі статуси" },
-              { id: "needs_reply", label: "Без відповіді" },
+              { id: "new", label: "Новий" },
+                      { id: "needs_reply", label: "Без відповіді" },
               { id: "draft", label: "Чернетка" },
               { id: "sent", label: "Відповідь надіслана" },
               { id: "closed", label: "Закрито" },
@@ -517,10 +488,12 @@ export default function ReviewManagementDashboard() {
           />
 
           <CustomDropdown
+            placeholder="Оцінка"
             value={rating}
             onChange={(val) => setRating(val)}
             options={[
               { id: "all", label: "Усі оцінки" },
+              { id: "none", label: "Без оцінки" },
               { id: "5", label: "5 зірок ⭐️⭐️⭐️⭐️⭐️" },
               { id: "4", label: "4 зірки ⭐️⭐️⭐️⭐️" },
               { id: "3", label: "3 зірки ⭐️⭐️⭐️" },
@@ -531,6 +504,15 @@ export default function ReviewManagementDashboard() {
         </div>
       </section>
 
+      <p role="status" className="mt-3 text-sm">{syncState === 'error' || syncState === 'offline' ? 'Дані можуть бути застарілими. ' : ''}{syncMessage} · Показано {filtered.length} із {data.reviews.length}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <CustomDropdown placeholder="Джерело" value={sourceFilter} onChange={value => setSourceFilter(String(value))} options={[{ id: 'all', label: 'Усі джерела' }, ...Array.from(new Set(data.reviews.map(r => r.source))).map(id => ({ id, label: id }))]} />
+        <CustomDropdown placeholder="Сортування" value={order} onChange={value => setOrder(String(value))} options={[{ id: 'newest', label: 'Спочатку нові' }, { id: 'oldest', label: 'Спочатку старі' }, { id: 'rating', label: 'Спочатку критичні' }]} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <input aria-label="Фільтр за відповідальним" placeholder="Відповідальний" value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)} className="rounded-xl bg-white/10 p-3" />
+        <button type="button" onClick={() => { setQuery(''); setStatus('all'); setRating('all'); setSourceFilter('all'); setAssigneeFilter(''); setOrder('newest'); }} className="rounded-xl border border-white/20 p-3">Скинути фільтри</button>
+      </div>
       <section className="mt-4 grid gap-4">
         {filtered.length === 0 ? (
           <div className="rounded-[28px] border border-dashed border-white/15 bg-white/[.025] p-14 text-center text-white/42">
@@ -582,11 +564,13 @@ export default function ReviewManagementDashboard() {
                 <div className="flex shrink-0 gap-2 xl:w-[150px] xl:flex-col">
                   <button
                     type="button"
+                    disabled={!hasSharedReviewsApi || syncState === 'saving'}
                     onClick={() => setSelected(review)}
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#cfeeed] px-4 py-3 text-sm font-black text-[#531027] transition hover:bg-[#e2f8f6] xl:flex-none"
                   >
                     <MessageSquareText size={15} /> Опрацювати
                   </button>
+                  <button type="button" disabled={syncState === 'saving' || !hasSharedReviewsApi} onClick={() => void saveChanges(review.id, { status: review.status === 'closed' ? 'needs_reply' : 'closed', updatedAt: review.updatedAt }).catch(() => {})} className="rounded-xl border border-white/20 px-3 py-2 text-xs">{review.status === 'closed' ? 'Повернути в роботу' : 'Закрити відгук'}</button>
                   {review.url && (
                     <a href={review.url} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[.025] px-4 py-3 text-sm font-black text-white/55 transition hover:bg-white/[.06] hover:text-white/80 xl:flex-none">
                       <ExternalLink size={15} /> Оригінал
@@ -601,7 +585,9 @@ export default function ReviewManagementDashboard() {
 
       {selected && (
         <ReviewModal
+          key={selected.id}
           review={selected}
+          onDelete={() => deleteReview(selected.id)}
           onClose={() => setSelected(null)}
           onSave={changes => saveChanges(selected.id, changes)}
           onOpenImage={index => setLightbox({ images: selected.images, index })}
@@ -670,24 +656,52 @@ function PhotoLightbox({ state, onChange, onClose }: { state: NonNullable<Lightb
   );
 }
 
-function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review; onClose: () => void; onSave: (changes: Partial<Review>) => Promise<void>; onOpenImage: (index: number) => void }) {
+function useReviewDialog() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    ref.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const elements = Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]') || []);
+      const first = elements[0], last = elements[elements.length - 1];
+      if (!first) return;
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || document.activeElement === ref.current)) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', onKey); previous?.focus(); };
+  }, []);
+  return ref;
+}
+
+function ReviewModal({ review, onClose, onSave, onDelete, onOpenImage }: { onDelete: () => Promise<void>; review: Review; onClose: () => void; onSave: (changes: Partial<Review>) => Promise<void>; onOpenImage: (index: number) => void }) {
+  const [fields, setFields] = useState(review);
+  const [error, setError] = useState('');
   const [reply, setReply] = useState(review.reply);
   const [note, setNote] = useState(review.internalNote);
   const [assignee, setAssignee] = useState(review.assignee);
   const [status, setStatus] = useState<Status>(review.status);
   const [saving, setSaving] = useState(false);
+  const dialogRef = useReviewDialog();
   const [copied, setCopied] = useState(false);
 
   const save = async () => {
     setSaving(true);
     try {
+      setError('');
       await onSave({
+        updatedAt: review.updatedAt, source: fields.source, date: fields.date, author: fields.author, rating: fields.rating, content: fields.content, url: fields.url,
         reply,
         internalNote: note,
         assignee,
-        status,
-        respondedAt: status === 'sent' && !review.respondedAt ? new Date().toISOString() : review.respondedAt,
+        status: !reply.trim() && status === 'sent' ? 'needs_reply' : status,
+        respondedAt: !reply.trim() ? '' : status === 'sent' && !review.respondedAt ? new Date().toISOString() : review.respondedAt,
       });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Не вдалося зберегти');
     } finally {
       setSaving(false);
     }
@@ -695,15 +709,15 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
 
   const copy = async () => {
     if (!reply) return;
-    await navigator.clipboard.writeText(reply);
+    try { await navigator.clipboard.writeText(reply); } catch { setError('Не вдалося скопіювати. Виділіть текст вручну.'); return; }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-[#160109]/78 p-0 backdrop-blur-md lg:items-center lg:p-6">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Редагування відгуку" className="fixed inset-0 z-[200] flex items-end justify-center bg-[#160109]/78 p-0 backdrop-blur-md lg:items-center lg:p-6">
       <div className="flex max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-[30px] border border-white/12 bg-[#350313] text-white shadow-[0_40px_120px_rgba(0,0,0,.45)] lg:max-h-[92vh] lg:rounded-[30px]">
-        <header className="flex items-start justify-between gap-4 border-b border-white/[.08] bg-white/[.025] px-5 py-4 md:px-7">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/[.08] bg-white/[.025] px-5 py-4 md:px-7">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[#cfeeed]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.14em] text-[#d8f4f2]">{review.source}</span>
@@ -711,7 +725,7 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
             </div>
             <h2 className="mt-2 truncate text-xl font-black tracking-tight md:text-2xl">Опрацювання відгуку · {review.author}</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full border border-white/10 bg-white/[.035] p-2.5 text-white/55 transition hover:bg-white/[.08] hover:text-white"><X size={20} /></button>
+          <button type="button" disabled={saving} aria-label="Закрити вікно" onClick={onClose} className="rounded-full border border-white/10 bg-white/[.035] p-2.5 text-white/55 transition hover:bg-white/[.08] hover:text-white"><X size={20} /></button>
         </header>
 
         <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[.92fr_1.08fr] lg:overflow-hidden">
@@ -740,6 +754,12 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
           </aside>
 
           <section className="p-5 lg:overflow-y-auto md:p-7">
+            {error && <p role="alert" className="mb-4 text-rose-200">{error}</p>}
+            <fieldset disabled={saving} className="mb-5 grid gap-3 sm:grid-cols-2">
+              {([['source', 'Джерело'], ['date', 'Дата'], ['author', 'Автор'], ['url', 'URL']] as const).map(([key, label]) => <label key={key}>{label}<input type={key === 'date' ? 'date' : 'text'} value={fields[key]} onChange={e => setFields({ ...fields, [key]: e.target.value })} className="mt-1 w-full rounded-xl bg-white/10 p-3" /></label>)}
+              <label>Оцінка<select aria-label="Оцінка" className="w-full rounded-xl bg-[#4c061c] p-3" value={fields.rating ?? ''} onChange={e => setFields({ ...fields, rating: e.target.value ? Number(e.target.value) : null })}><option value="">Без оцінки</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+              <label className="sm:col-span-2">Текст відгуку<textarea aria-label="Текст відгуку" className="mt-1 w-full rounded-xl bg-white/10 p-3" rows={4} value={fields.content} onChange={e => setFields({ ...fields, content: e.target.value })} /></label>
+            </fieldset>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-[11px] font-black uppercase tracking-[.12em] text-white/40">
                 Статус опрацювання
@@ -748,6 +768,7 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
                     value={status}
                     onChange={(val) => setStatus(val as Status)}
                     options={[
+                      { id: "new", label: "Новий" },
                       { id: "needs_reply", label: "Без відповіді" },
                       { id: "draft", label: "Чернетка" },
                       { id: "sent", label: "Відповідь надіслана" },
@@ -760,7 +781,7 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
                 Відповідальний
                 <div className="relative mt-2">
                   <UserRound size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
-                  <input value={assignee} onChange={event => setAssignee(event.target.value)} placeholder="Ім’я працівника" className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30" />
+                  <input disabled={saving} value={assignee} onChange={event => setAssignee(event.target.value)} placeholder="Ім’я працівника" className="w-full rounded-2xl border border-white/10 bg-white/[.04] py-3.5 pl-10 pr-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30" />
                 </div>
               </label>
             </div>
@@ -769,34 +790,34 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-black uppercase tracking-[.13em] text-[#cfeeed]/55">Публічна відповідь</div>
-                  <div className="mt-1 text-xs text-white/30">Текст, який піде гостю у відповідь</div>
+                  <div className="mt-1 text-xs text-white/30">Зберігається в CRM. Опублікуйте відповідь у джерелі вручну</div>
                 </div>
                 <button type="button" onClick={() => void copy()} disabled={!reply} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 text-xs font-black text-white/55 transition hover:bg-white/[.07] hover:text-white disabled:opacity-35"><Clipboard size={14} /> {copied ? 'Скопійовано' : 'Копіювати'}</button>
               </div>
-              <textarea value={reply} onChange={event => setReply(event.target.value)} rows={7} placeholder="Напишіть відповідь гостю…" className="mt-4 w-full resize-y rounded-[18px] border border-white/10 bg-[#2d020f]/55 p-4 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30" />
-              <div className="mt-2 text-right text-[11px] text-white/25">{reply.length} символів</div>
+              <textarea aria-label="Публічна відповідь" disabled={saving} value={reply} onChange={event => setReply(event.target.value)} rows={7} placeholder="Напишіть відповідь гостю…" className="mt-4 w-full resize-y rounded-[18px] border border-white/10 bg-[#2d020f]/55 p-4 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30" />
+              <button type="button" disabled={saving || !reply} onClick={() => { setReply(''); setStatus('needs_reply'); }} className="mt-2 rounded-xl border border-white/20 p-2">Очистити відповідь</button>
             </div>
 
             <label className="mt-5 block text-[11px] font-black uppercase tracking-[.12em] text-white/40">
               Внутрішній коментар
-              <textarea value={note} onChange={event => setNote(event.target.value)} rows={4} placeholder="Що важливо зафіксувати для команди — не бачить гість" className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[.035] p-4 text-sm normal-case leading-6 tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30" />
+              <textarea aria-label="Внутрішній коментар" disabled={saving} value={note} onChange={event => setNote(event.target.value)} rows={4} placeholder="Що важливо зафіксувати для команди — не бачить гість" className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[.035] p-4 text-sm normal-case leading-6 tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#cfeeed]/30" />
             </label>
 
             <div className="mt-6 flex flex-col-reverse gap-2 border-t border-white/[.08] pt-5 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm("Ви дійсно хочете видалити цей відгук?")) {
-                    onSave({ status: "closed" });
-                    onClose();
-                  }
+                disabled={saving}
+                onClick={async () => {
+                  if (!window.confirm('Видалити відгук назавжди? Цю дію неможливо скасувати.')) return;
+                  setSaving(true);
+                  try { await onDelete(); } catch (e) { setError(e instanceof Error ? e.message : 'Не вдалося видалити'); } finally { setSaving(false); }
                 }}
                 className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-3.5 py-2.5 text-xs font-black text-rose-300 hover:bg-rose-500/20 transition"
               >
                 <Trash2 size={14} /> Видалити
               </button>
               <div className="flex gap-2">
-                <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black text-white/55 transition hover:bg-white/[.05] hover:text-white">Закрити</button>
+                <button type="button" disabled={saving} onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black text-white/55 transition hover:bg-white/[.05] hover:text-white">Закрити</button>
                 <button type="button" onClick={() => void save()} disabled={saving} className="inline-flex min-w-[145px] items-center justify-center gap-2 rounded-2xl bg-[#cfeeed] px-5 py-3 text-sm font-black text-[#531027] transition hover:bg-[#e2f8f6] disabled:opacity-50">{saving ? <><RefreshCw size={15} className="animate-spin" /> Зберігаємо…</> : <><CheckCircle2 size={15} /> Зберегти</>}</button>
               </div>
             </div>
@@ -808,6 +829,8 @@ function ReviewModal({ review, onClose, onSave, onOpenImage }: { review: Review;
 }
 
 function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Review) => Promise<void> }) {
+  const [error, setError] = useState('');
+  const [id] = useState(() => crypto.randomUUID());
   const [source, setSource] = useState("Instagram");
   const [author, setAuthor] = useState("");
   const [reviewDate, setReviewDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -816,12 +839,15 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
   const [url, setUrl] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const dialogRef = useReviewDialog();
 
   const add = async () => {
+    if (saving) return;
+    setError('');
     setSaving(true);
     try {
       await onAdd({
-        id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id,
         source,
         date: reviewDate || new Date().toISOString().slice(0, 10),
         url,
@@ -838,6 +864,8 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
         updatedAt: "",
         tags: [],
       });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Не вдалося зберегти');
     } finally {
       setSaving(false);
     }
@@ -862,7 +890,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
   ];
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#160109]/82 p-3 sm:p-4 backdrop-blur-md">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Новий відгук" className="fixed inset-0 z-[200] flex items-center justify-center bg-[#160109]/82 p-3 sm:p-4 backdrop-blur-md">
       <div className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-white/12 bg-[#350313] text-white shadow-[0_35px_100px_rgba(0,0,0,.5)]">
         {/* Fixed Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-white/[.08] bg-white/[.025] px-6 py-4">
@@ -870,11 +898,12 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
             <div className="text-[10px] font-black uppercase tracking-[.16em] text-[#cfeeed]/45">Manual review</div>
             <h2 className="mt-0.5 text-xl font-black">Додати відгук</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/[.06] hover:text-white">
+          <button type="button" disabled={saving} onClick={onClose} className="rounded-full border border-white/10 p-2 text-white/55 hover:bg-white/[.06] hover:text-white">
             <X size={19} />
           </button>
         </div>
 
+        {error && <p role="alert" className="px-6 text-rose-200">{error}</p>}
         {/* Scrollable Form Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-3.5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -955,7 +984,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (review: Rev
 
         {/* Fixed Always-Visible Footer */}
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/[.08] bg-[#350313] px-6 py-4">
-          <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 font-black text-white/55 hover:bg-white/[.05] hover:text-white">
+          <button type="button" disabled={saving} onClick={onClose} className="rounded-2xl border border-white/10 px-4 py-3 font-black text-white/55 hover:bg-white/[.05] hover:text-white">
             Скасувати
           </button>
           <button

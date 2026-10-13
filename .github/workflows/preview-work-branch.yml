@@ -76,6 +76,7 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: /marmoo-fb/data.json
+          VITE_REVIEWS_API_URL: https://script.google.com/macros/s/AKfycbx7oCTUXwRGY1EqnVBsDfSDDI5Zr1-D1K-Cy9NK1altm5a9MOezTpr828m7KkgoC3Hj/exec
 
       - name: Install Chromium for smoke tests
         run: npx playwright install --with-deps chromium
