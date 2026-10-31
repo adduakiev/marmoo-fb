@@ -1,0 +1,2 @@
+MARMOO XML feed deployment trigger
+Updated after ChoiceQR price normalization.
